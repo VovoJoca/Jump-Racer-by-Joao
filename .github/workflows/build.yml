@@ -50,8 +50,8 @@ jobs:
             openjdk-17-jdk unzip zip autoconf libtool pkg-config \
             libltdl-dev
 
-      - name: Instalar buildozer e cython
-        run: pip install --upgrade buildozer cython==0.29.36 virtualenv
+      - name: Instalar buildozer e cython (versões estáveis testadas)
+        run: pip install buildozer==1.5.0 python-for-android==2024.1.21 cython==0.29.36 virtualenv
 
       - name: Build do APK (buildozer android debug)
         run: |
