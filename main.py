@@ -63,6 +63,12 @@ NOTAS TÉCNICAS (v5):
 
 import os
 import sys
+
+# python-for-android define essa variável de ambiente automaticamente
+# quando o jogo roda dentro de um APK Android — assim conseguimos
+# mostrar os controles de toque só quando fizer sentido (no Android),
+# sem precisar de um código-fonte separado pra cada plataforma.
+IS_ANDROID = "ANDROID_ARGUMENT" in os.environ
 import math
 import random
 import wave
@@ -1225,6 +1231,66 @@ def draw_minimap(surf, racers):
 N_BARS = 10
 BAR_PIX = 6
 
+# --------------------------------------------------------------------------
+# CONTROLES POR TOQUE (celular/tablet sem teclado)
+# --------------------------------------------------------------------------
+def race_touch_buttons():
+    """Retângulos dos botões de toque durante a corrida."""
+    return {
+        "move": pygame.Rect(WIDTH - 190, HEIGHT - 190, 170, 170),
+        "up": pygame.Rect(18, HEIGHT // 2 - 100, 84, 84),
+        "down": pygame.Rect(18, HEIGHT // 2 + 16, 84, 84),
+        "mute": pygame.Rect(WIDTH - 54, 54, 42, 42),
+    }
+
+
+def draw_race_touch_buttons(surf, moving, music_enabled):
+    btns = race_touch_buttons()
+
+    move = btns["move"]
+    col = (90, 220, 140, 210) if moving else (255, 255, 255, 130)
+    s = pygame.Surface((move.width, move.height), pygame.SRCALPHA)
+    pygame.draw.circle(s, col, (move.width // 2, move.height // 2), move.width // 2)
+    pygame.draw.circle(s, (40, 30, 20, 220), (move.width // 2, move.height // 2), move.width // 2, width=4)
+    surf.blit(s, move.topleft)
+    tri = [(move.centerx - 22, move.centery - 30), (move.centerx - 22, move.centery + 30),
+           (move.centerx + 30, move.centery)]
+    pygame.draw.polygon(surf, (40, 30, 20), tri)
+    lbl = font_small.render("SEGURE", True, (40, 30, 20))
+    surf.blit(lbl, lbl.get_rect(center=(move.centerx, move.bottom - 18)))
+
+    for key, arrow in (("up", "▲"), ("down", "▼")):
+        r = btns[key]
+        s = pygame.Surface((r.width, r.height), pygame.SRCALPHA)
+        pygame.draw.rect(s, (255, 255, 255, 140), s.get_rect(), border_radius=14)
+        pygame.draw.rect(s, (40, 30, 20, 220), s.get_rect(), width=3, border_radius=14)
+        surf.blit(s, r.topleft)
+        lbl = font_med.render(arrow, True, (40, 30, 20))
+        surf.blit(lbl, lbl.get_rect(center=r.center))
+
+    mute = btns["mute"]
+    s = pygame.Surface((mute.width, mute.height), pygame.SRCALPHA)
+    pygame.draw.circle(s, (255, 255, 255, 140), (mute.width // 2, mute.height // 2), mute.width // 2)
+    pygame.draw.circle(s, (40, 30, 20, 220), (mute.width // 2, mute.height // 2), mute.width // 2, width=2)
+    surf.blit(s, mute.topleft)
+    icon = font_small.render("♪" if music_enabled else "X", True, (40, 30, 20))
+    surf.blit(icon, icon.get_rect(center=mute.center))
+
+
+def draw_tap_to_continue_button(surf, label, y):
+    """Botão de toque genérico (usado em 'começar', 'próxima pista' e
+    'voltar ao menu') — sempre no mesmo estilo, centralizado."""
+    lbl = font_med.render(label, True, (255, 255, 255))
+    pad_x, pad_y = 34, 16
+    rect = pygame.Rect(0, 0, lbl.get_width() + pad_x * 2, lbl.get_height() + pad_y * 2)
+    rect.center = (WIDTH // 2, y)
+    s = pygame.Surface((rect.width, rect.height), pygame.SRCALPHA)
+    pygame.draw.rect(s, (90, 170, 90, 235), s.get_rect(), border_radius=14)
+    pygame.draw.rect(s, (255, 255, 255, 230), s.get_rect(), width=3, border_radius=14)
+    surf.blit(s, rect.topleft)
+    surf.blit(lbl, lbl.get_rect(center=rect.center))
+    return rect
+
 def draw_equalizer(surf, song_time, x, y, enabled, synced=True):
     w = N_BARS * (BAR_PIX * 2)
     h = 12 * BAR_PIX
@@ -1377,10 +1443,14 @@ def draw_title_screen(surf, t, selected_color_idx, difficulty, track_theme):
         dsc = font_small.render(desc, True, txt_col)
         surf.blit(dsc, dsc.get_rect(center=(rect.centerx, rect.centery + 16)))
 
-    hint = font_med.render("Pressione ENTER para começar!", True, (60, 45, 30))
-    surf.blit(hint, hint.get_rect(center=(WIDTH // 2, HEIGHT - 33)))
+    if IS_ANDROID:
+        start_rect = draw_tap_to_continue_button(surf, "COMEÇAR! (ou tecle ENTER)", HEIGHT - 33)
+    else:
+        hint = font_med.render("Pressione ENTER para começar!", True, (60, 45, 30))
+        surf.blit(hint, hint.get_rect(center=(WIDTH // 2, HEIGHT - 33)))
+        start_rect = None
 
-    return color_rects, track_rects, diff_rects
+    return color_rects, track_rects, diff_rects, start_rect
 
 
 # --------------------------------------------------------------------------
@@ -1435,6 +1505,10 @@ def main():
     song_time = 0.0
     results = []
     color_rects, track_rects, diff_rects = [], {}, {}
+    start_rect = None
+    next_track_rect = None
+    menu_rect = None
+    touch_moving = False  # controle por toque: segurando o botão "ANDAR"?
 
     def start_race(track_key, p_color, diff):
         """(Re)inicia uma corrida numa pista específica, trocando a
@@ -1449,6 +1523,21 @@ def main():
         state = STATE_COUNTDOWN
         countdown_timer = 3.0
         results = []
+
+    def begin_race_from_title():
+        nonlocal campaign_mode, campaign_idx, campaign_points, campaign_player_color, campaign_difficulty
+        player_color = RACER_COLORS[selected_color_idx]
+        if track_theme == TRACKS[0]["key"]:
+            # começar pela primeira pista obriga a campanha completa,
+            # em sequência, até a pista 12
+            campaign_mode = True
+            campaign_idx = 0
+            campaign_points = {c: 0 for c in RACER_COLORS}
+            campaign_player_color = player_color
+            campaign_difficulty = difficulty
+        else:
+            campaign_mode = False
+        start_race(track_theme, player_color, difficulty)
 
     running = True
     while running:
@@ -1483,18 +1572,7 @@ def main():
                         switch_music(preview_path)
                         set_music_volume(0.55 if music_on else 0.0)
                     elif event.key in (pygame.K_RETURN, pygame.K_SPACE, pygame.K_KP_ENTER):
-                        player_color = RACER_COLORS[selected_color_idx]
-                        if track_theme == TRACKS[0]["key"]:
-                            # começar pela primeira pista obriga a campanha
-                            # completa, em sequência, até a pista 12
-                            campaign_mode = True
-                            campaign_idx = 0
-                            campaign_points = {c: 0 for c in RACER_COLORS}
-                            campaign_player_color = player_color
-                            campaign_difficulty = difficulty
-                        else:
-                            campaign_mode = False
-                        start_race(track_theme, player_color, difficulty)
+                        begin_race_from_title()
 
                 elif state == STATE_RACING:
                     if event.key in (pygame.K_UP, pygame.K_w):
@@ -1541,9 +1619,39 @@ def main():
                 for key, rect in diff_rects.items():
                     if rect.collidepoint(mx, my):
                         difficulty = key
+                if start_rect and start_rect.collidepoint(mx, my):
+                    begin_race_from_title()
+
+            elif event.type == pygame.MOUSEBUTTONDOWN and state == STATE_RACING and IS_ANDROID:
+                btns = race_touch_buttons()
+                if btns["move"].collidepoint(event.pos):
+                    touch_moving = True
+                elif btns["up"].collidepoint(event.pos):
+                    player.set_pos(player.target_pos - 1)
+                elif btns["down"].collidepoint(event.pos):
+                    player.set_pos(player.target_pos + 1)
+                elif btns["mute"].collidepoint(event.pos):
+                    music_on = not music_on
+                    set_music_volume(0.55 if music_on else 0.0)
+
+            elif event.type == pygame.MOUSEBUTTONUP and state == STATE_RACING and IS_ANDROID:
+                touch_moving = False
+
+            elif event.type == pygame.MOUSEBUTTONDOWN and state == STATE_TRACK_RESULT:
+                if next_track_rect and next_track_rect.collidepoint(event.pos):
+                    campaign_idx += 1
+                    next_track = TRACKS[campaign_idx]["key"]
+                    start_race(next_track, campaign_player_color, campaign_difficulty)
+
+            elif event.type == pygame.MOUSEBUTTONDOWN and state in (STATE_FINISHED, STATE_CAMPAIGN_FINISHED):
+                if menu_rect and menu_rect.collidepoint(event.pos):
+                    campaign_mode = False
+                    state = STATE_TITLE
+                    switch_music(MUSIC_PATH)
+                    set_music_volume(0.55 if music_on else 0.0)
 
         keys = pygame.key.get_pressed()
-        moving_right = keys[pygame.K_RIGHT] or keys[pygame.K_d]
+        moving_right = keys[pygame.K_RIGHT] or keys[pygame.K_d] or touch_moving
 
         if state == STATE_COUNTDOWN:
             countdown_timer -= dt
@@ -1583,7 +1691,7 @@ def main():
 
         # ---------------- DESENHO ----------------
         if state == STATE_TITLE:
-            color_rects, track_rects, diff_rects = draw_title_screen(
+            color_rects, track_rects, diff_rects, start_rect = draw_title_screen(
                 screen, t, selected_color_idx, difficulty, track_theme)
         else:
             cam_x = player.world_x
@@ -1616,6 +1724,8 @@ def main():
                 if not moving_right:
                     hint = font_small.render("segure -> pra andar!", True, (255, 235, 120))
                     screen.blit(hint, (16, 122))
+                if IS_ANDROID:
+                    draw_race_touch_buttons(screen, moving_right, music_on)
 
             if state == STATE_COUNTDOWN:
                 secs = int(countdown_timer) + 1
@@ -1636,7 +1746,8 @@ def main():
                     surf_line = font_med.render(line, True, col)
                     screen.blit(surf_line, surf_line.get_rect(center=(WIDTH // 2, 230 + i * 42)))
                 hint = font_small.render("Pressione R para voltar ao menu  |  ESC para sair", True, (230, 230, 230))
-                screen.blit(hint, hint.get_rect(center=(WIDTH // 2, HEIGHT - 60)))
+                screen.blit(hint, hint.get_rect(center=(WIDTH // 2, HEIGHT - 90 if IS_ANDROID else HEIGHT - 60)))
+                menu_rect = draw_tap_to_continue_button(screen, "VOLTAR AO MENU", HEIGHT - 45) if IS_ANDROID else None
 
             if state == STATE_TRACK_RESULT:
                 overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
@@ -1662,8 +1773,14 @@ def main():
                     screen.blit(surf_line, surf_line.get_rect(center=(WIDTH // 2, 220 + i * 32)))
 
                 next_track = TRACKS[campaign_idx + 1]
-                hint = font_med.render(f"ENTER para a próxima pista: {next_track['label']}", True, (230, 230, 230))
-                screen.blit(hint, hint.get_rect(center=(WIDTH // 2, HEIGHT - 60)))
+                if IS_ANDROID:
+                    hint = font_small.render(f"Próxima pista: {next_track['label']}", True, (230, 230, 230))
+                    screen.blit(hint, hint.get_rect(center=(WIDTH // 2, HEIGHT - 90)))
+                    next_track_rect = draw_tap_to_continue_button(screen, "PRÓXIMA PISTA! (ou ENTER)", HEIGHT - 45)
+                else:
+                    hint = font_med.render(f"ENTER para a próxima pista: {next_track['label']}", True, (230, 230, 230))
+                    screen.blit(hint, hint.get_rect(center=(WIDTH // 2, HEIGHT - 60)))
+                    next_track_rect = None
 
             if state == STATE_CAMPAIGN_FINISHED:
                 overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
@@ -1687,7 +1804,8 @@ def main():
                     screen.blit(surf_line, surf_line.get_rect(center=(WIDTH // 2, 220 + i * 42)))
 
                 hint = font_small.render("Pressione R para voltar ao menu  |  ESC para sair", True, (230, 230, 230))
-                screen.blit(hint, hint.get_rect(center=(WIDTH // 2, HEIGHT - 50)))
+                screen.blit(hint, hint.get_rect(center=(WIDTH // 2, HEIGHT - 90 if IS_ANDROID else HEIGHT - 60)))
+                menu_rect = draw_tap_to_continue_button(screen, "VOLTAR AO MENU", HEIGHT - 45) if IS_ANDROID else None
 
         pygame.display.flip()
 
