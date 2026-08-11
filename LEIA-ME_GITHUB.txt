@@ -1,0 +1,103 @@
+SUPER JUMP RACER — GERANDO O .EXE (Windows) E O .APK (Android) PELO GITHUB
+=============================================================================
+
+Preparei este pacote pra usar o GitHub Actions, que gera os dois
+programas (Windows E Android) de graça, na nuvem — você não precisa
+ter Windows nem instalar o Android SDK na sua máquina. É só subir
+esta pasta pro GitHub e apertar um botão.
+
+O QUE TEM NESTA PASTA
+------------------------
+  main.py                      -> o jogo (código-fonte completo)
+  assets/                      -> sprites e música já prontos
+  buildozer.spec                -> configuração do build Android
+  .github/workflows/build.yml   -> a receita que gera os dois programas
+
+
+PASSO A PASSO
+---------------
+1) Crie uma conta gratuita no GitHub (github.com), se ainda não tiver.
+
+2) Crie um repositório novo (pode ser privado ou público, tanto faz).
+   Nome sugerido: super-jump-racer
+
+3) Suba TODOS os arquivos desta pasta pro repositório, mantendo a
+   estrutura de pastas exatamente como está (incluindo a pasta
+   ".github/workflows" — ela é "escondida", então preste atenção pra
+   não esquecer dela ao arrastar os arquivos pela interface web).
+
+   Dica: se estiver usando a interface web do GitHub, o mais fácil é:
+   - Criar o repositório vazio
+   - Clicar em "uploading an existing file"
+   - Arrastar a pasta inteira (a maioria dos navegadores aceita
+     arrastar pastas direto)
+
+   Ou, se preferir usar linha de comando (git):
+     git init
+     git add .
+     git commit -m "Super Jump Racer"
+     git branch -M main
+     git remote add origin https://github.com/SEU_USUARIO/super-jump-racer.git
+     git push -u origin main
+
+4) No GitHub, abra a aba "Actions" do repositório.
+   - Se aparecer um aviso pra habilitar Actions, clique em habilitar.
+   - Clique em "Build Super Jump Racer (Windows EXE + Android APK)"
+     na lista à esquerda.
+   - Clique no botão "Run workflow" (canto direito) e confirme.
+
+5) Espere o build terminar (geralmente uns 15-30 minutos — o Android
+   demora mais que o Windows porque baixa o SDK/NDK na primeira vez).
+   Você pode acompanhar o progresso clicando no run que apareceu.
+
+6) Quando terminar (bolinha verde ✅), role até o final da página do
+   run. Na seção "Artifacts", vão aparecer dois arquivos pra baixar:
+     - SuperJumpRacer-Windows   -> baixe, extraia o .zip, e dentro
+       tem o SuperJumpRacer.exe + a pasta assets/ juntos. Dê
+       duplo-clique no .exe pra jogar (Windows pode avisar que é de
+       um "editor desconhecido" — clique em "mais informações" ->
+       "executar assim mesmo", já que fomos nós que geramos).
+     - SuperJumpRacer-Android-APK -> baixe, extraia, e dentro tem o
+       arquivo .apk. Transfira ele pro celular Android (por cabo,
+       e-mail, Google Drive, o que for mais fácil) e toque nele pra
+       instalar (talvez precise habilitar "instalar de fontes
+       desconhecidas" nas configurações do Android na primeira vez).
+
+
+SOBRE A MÚSICA PERSONALIZADA POR PISTA
+------------------------------------------
+Se você quiser que cada uma das 12 pistas toque uma música diferente,
+coloque os arquivos ANTES de subir pro GitHub (passo 3), com estes
+nomes exatos dentro da pasta assets/:
+
+   assets/custom_theme01.mp3   (pista 1 - Cidade)
+   assets/custom_theme02.mp3   (pista 2 - Deserto)
+   ...
+   assets/custom_theme12.mp3   (pista 12 - Céu)
+
+O jogo detecta e usa esses arquivos automaticamente, tanto na versão
+Windows quanto na versão Android.
+
+
+SE QUISER MUDAR ALGO E GERAR DE NOVO
+----------------------------------------
+Sempre que quiser uma nova versão (depois de editar o main.py, trocar
+uma música, etc.), é só subir os arquivos atualizados pro mesmo
+repositório e repetir o passo 4 (Actions -> Run workflow). Cada
+execução gera um novo .exe e .apk do zero.
+
+
+SE ALGO DER ERRADO
+----------------------
+- Build do Android falhando: geralmente é algum pacote Python nas
+  "requirements" do buildozer.spec que precisa de compilação nativa.
+  Como o jogo já vem com os sprites/música prontos, isso não deveria
+  acontecer aqui — mas se você mexer no código e adicionar alguma
+  biblioteca nova, ela pode precisar de uma "recipe" própria do
+  python-for-android.
+- Build do Windows falhando: normalmente é algum "hidden import" que
+  o PyInstaller não detectou sozinho. Dá pra adicionar mais
+  "--hidden-import NOME_DO_MODULO" na linha do pyinstaller dentro do
+  arquivo .github/workflows/build.yml.
+- Em ambos os casos, clique no job que falhou (bolinha vermelha ❌)
+  pra ver o log detalhado do erro.

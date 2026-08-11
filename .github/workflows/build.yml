@@ -1,0 +1,63 @@
+name: Build Super Jump Racer (Windows EXE + Android APK)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Instalar dependencias
+        run: pip install pygame numpy pillow pyinstaller
+
+      - name: Gerar o executavel
+        run: pyinstaller --onefile --windowed --name SuperJumpRacer --hidden-import PIL --hidden-import PIL.Image --hidden-import PIL.ImageDraw --hidden-import numpy main.py
+
+      - name: Montar o pacote final (exe + assets)
+        shell: cmd
+        run: |
+          mkdir dist\SuperJumpRacer_Windows
+          copy dist\SuperJumpRacer.exe dist\SuperJumpRacer_Windows\
+          xcopy assets dist\SuperJumpRacer_Windows\assets\ /E /I /Y
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SuperJumpRacer-Windows
+          path: dist/SuperJumpRacer_Windows
+
+  build-android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Instalar dependencias de sistema
+        run: |
+          sudo apt update
+          sudo apt install -y build-essential git python3-dev ffmpeg \
+            libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev \
+            libportmidi-dev libswscale-dev libavformat-dev libavcodec-dev \
+            zlib1g-dev libgstreamer1.0-dev \
+            openjdk-17-jdk unzip zip autoconf libtool pkg-config \
+            libltdl-dev
+
+      - name: Instalar buildozer e cython
+        run: pip install --upgrade buildozer cython==0.29.36 virtualenv
+
+      - name: Build do APK (buildozer android debug)
+        run: |
+          yes | buildozer android debug
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SuperJumpRacer-Android-APK
+          path: bin/*.apk
