@@ -12,13 +12,16 @@ version = 2.0
 # o jogo nao precisa gerar nada em tempo real -> nao precisamos
 # incluir numpy nem pillow como dependencia (build mais rapido e
 # confiavel).
-requirements = python3==3.11.9,hostpython3==3.11.9,cython,pygame-ce
+requirements = python3==3.11.9,hostpython3==3.11.9,pygame
 # Fixamos o Python em 3.11.9 (em vez de deixar solto em "python3", que
 # o python-for-android estava resolvendo para a versão 3.14, bem
-# recente demais — o pygame-ce e até o próprio Cython ainda não
-# tinham código C compatível com as mudanças internas do Python 3.14,
-# causando erros de compilação. O 3.11 é uma versão bem mais madura e
-# testada por todo o ecossistema Kivy/Buildozer.
+# recente demais — causava erros de compilação em várias bibliotecas).
+# O 3.11 é uma versão bem mais madura e testada por todo o ecossistema
+# Kivy/Buildozer. Com o Python certo, voltamos a usar o "pygame"
+# clássico (em vez do pygame-ce) — a receita oficial dele no
+# python-for-android é testada há anos e não tem os problemas de
+# compilação que a receita (mais nova, ainda instável) do pygame-ce
+# estava causando.
 
 orientation = landscape
 fullscreen = 1
@@ -32,12 +35,6 @@ android.api = 35
 android.minapi = 21
 android.ndk = 25b
 android.archs = arm64-v8a
-
-# usa nossa receita própria do pygame-ce (na pasta p4a-recipes/), que
-# corrige um bug conhecido do python-for-android onde ele empacotava
-# um binário compilado para o processador errado (x86_64 em vez de
-# ARM), fazendo o app fechar sozinho ao abrir no celular.
-p4a.local_recipes = ./p4a-recipes
 
 [buildozer]
 log_level = 2
