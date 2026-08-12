@@ -101,3 +101,41 @@ SE ALGO DER ERRADO
   arquivo .github/workflows/build.yml.
 - Em ambos os casos, clique no job que falhou (bolinha vermelha ❌)
   pra ver o log detalhado do erro.
+
+
+"CRIADO PARA UMA VERSÃO MAIS ANTIGA DO ANDROID"
+====================================================
+Se o Android recusar instalar o APK com esse aviso, é porque o app
+estava mirando uma versão do Android antiga demais pro seu aparelho
+(comum em celulares recentes, como os com HyperOS/MIUI da Xiaomi).
+Já corrigido nesta versão: subi o "android.api" (a versão-alvo) pra
+34 no buildozer.spec. Se seu celular for MUITO recente e o aviso
+persistir, tente subir ainda mais (ex: android.api = 35) e gerar de
+novo.
+
+
+JOGANDO SEM TECLADO (celular/tablet)
+========================================
+O jogo agora tem controles na tela, pensados pra jogar só no toque,
+sem precisar de teclado nem controle bluetooth:
+
+- Tela de título: um botão grande "COMEÇAR!" embaixo — toca nele em
+  vez de apertar Enter. As setinhas "<" ">" do carrossel de pistas,
+  os robôs e os botões de dificuldade já funcionam no toque também.
+- Durante a corrida:
+    - Botão verde grande (canto inferior direito) — SEGURE o dedo
+      nele pra avançar (equivalente a segurar a seta direita).
+    - Setas ▲ ▼ (lado esquerdo da tela) — toque rápido pra mudar de
+      posição na pista.
+    - Ícone de nota musical (canto superior direito) — toca pra
+      ligar/desligar a música.
+- Nas telas de resultado (fim de pista, fim de corrida, fim da
+  campanha) — um botão grande embaixo, tipo "PRÓXIMA PISTA!" ou
+  "VOLTAR AO MENU", substitui o Enter/R do teclado.
+
+Obs.: os controles por toque usam um só ponto de contato por vez (a
+forma mais compatível entre aparelhos). Dá pra segurar o botão
+"ANDAR" e, rapidinho, soltar pra tocar ▲/▼ e voltar a segurar — o
+jogo tolera bem essa troca rápida. Testei uma sessão inteira jogando
+só no toque (sem nenhuma tecla) e funcionou do início ao fim.
+
