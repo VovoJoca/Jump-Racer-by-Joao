@@ -12,7 +12,7 @@ version = 2.0
 # o jogo nao precisa gerar nada em tempo real -> nao precisamos
 # incluir numpy nem pillow como dependencia (build mais rapido e
 # confiavel).
-requirements = python3,pygame-ce
+requirements = python3,cython,pygame-ce
 
 orientation = landscape
 fullscreen = 1
