@@ -26,6 +26,7 @@ class PygameCERecipe(CompiledComponentsPythonRecipe):
         "setuptools",
         "jpeg",
         "png",
+        "cython",
     ]
     call_hostpython_via_targetpython = False  # por causa do setuptools
     install_in_hostpython = False
