@@ -12,7 +12,13 @@ version = 2.0
 # o jogo nao precisa gerar nada em tempo real -> nao precisamos
 # incluir numpy nem pillow como dependencia (build mais rapido e
 # confiavel).
-requirements = python3,cython,pygame-ce
+requirements = python3==3.11.9,hostpython3==3.11.9,cython,pygame-ce
+# Fixamos o Python em 3.11.9 (em vez de deixar solto em "python3", que
+# o python-for-android estava resolvendo para a versão 3.14, bem
+# recente demais — o pygame-ce e até o próprio Cython ainda não
+# tinham código C compatível com as mudanças internas do Python 3.14,
+# causando erros de compilação. O 3.11 é uma versão bem mais madura e
+# testada por todo o ecossistema Kivy/Buildozer.
 
 orientation = landscape
 fullscreen = 1
