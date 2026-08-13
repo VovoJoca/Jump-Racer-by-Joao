@@ -41,14 +41,18 @@ class PygameCERecipe(CompiledComponentsPythonRecipe):
     call_hostpython_via_targetpython = False  # por causa do setuptools
     install_in_hostpython = False
 
-    def prebuild_arch(self, arch):
-        super().prebuild_arch(arch)
-
+    def build_arch(self, arch):
         # Garante que o Cython esteja instalado no MESMO interpretador
         # Python que vai rodar "setup.py build_ext" (o hostpython de
-        # build, não o Python de destino do app).
+        # build, não o Python de destino do app). Isso só pode
+        # acontecer aqui (build_arch), não em prebuild_arch — nessa
+        # etapa mais cedo o hostpython ainda nem foi compilado.
         hostpython = sh.Command(self.ctx.hostpython)
         shprint(hostpython, "-m", "pip", "install", "-q", "cython==0.29.36", _tail=20)
+        super().build_arch(arch)
+
+    def prebuild_arch(self, arch):
+        super().prebuild_arch(arch)
 
         with current_directory(self.get_build_dir(arch.arch)):
             setup_template = open(join("buildconfig", "Setup.Android.SDL2.in")).read()
