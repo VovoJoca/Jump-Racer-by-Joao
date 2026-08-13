@@ -51,6 +51,34 @@ class PygameCERecipe(CompiledComponentsPythonRecipe):
         shprint(hostpython, "-m", "pip", "install", "-q", "cython==0.29.36", _tail=20)
         super().build_arch(arch)
 
+    def install_python_package(self, arch, name=None, env=None, is_dir=True):
+        # O pygame-ce, a partir de certas versões, usa o Meson como
+        # sistema de build "novo" — mas o próprio Meson do pygame-ce
+        # RECUSA explicitamente compilar para Android ("The meson
+        # buildconfig of pygame-ce does not support android for now").
+        # Por isso, mesmo já tendo compilado tudo via "setup.py
+        # build_ext" acima, o "pip install ." padrão do
+        # python-for-android tentaria acionar o Meson de novo (porque
+        # ele lê o pyproject.toml) e travaria numa checagem de
+        # sanidade que tenta RODAR um binário ARM no computador que
+        # está compilando (impossível). A correção, que é a mesma
+        # recomendada pela documentação oficial do pygame-ce para
+        # builds Android/Emscripten, é instalar chamando o "setup.py
+        # install" antigo diretamente, ignorando o pyproject.toml.
+        if env is None:
+            env = self.get_recipe_env(arch)
+        with current_directory(self.get_build_dir(arch.arch)):
+            hostpython = sh.Command(self.ctx.hostpython)
+            shprint(
+                hostpython,
+                "setup.py",
+                "install",
+                "--root=" + self.ctx.get_python_install_dir(arch.arch),
+                "--install-lib=.",
+                _env=env,
+                _tail=20,
+            )
+
     def prebuild_arch(self, arch):
         super().prebuild_arch(arch)
 
