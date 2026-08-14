@@ -23,7 +23,14 @@ from pythonforandroid.toolchain import current_directory
 
 
 class PygameCERecipe(CompiledComponentsPythonRecipe):
-    version = "2.5.0"
+    # Usamos 2.4.0 (não a mais recente) de propósito: a versão 2.5.0
+    # introduziu novas funções (math.invlerp/remap) cuja compilação
+    # cruzada para Android não fica bem resolvida pelo nosso arquivo
+    # de configuração de build (baseado numa referência da
+    # comunidade, escrita para versões anteriores do pygame-ce) —
+    # causava "cannot locate symbol invlerp" ao abrir o app no
+    # celular. A 2.4.0 evita esse problema por completo.
+    version = "2.4.0"
     url = "https://github.com/pygame-community/pygame-ce/archive/refs/tags/{version}.tar.gz"
 
     site_packages_name = "pygame-ce"
