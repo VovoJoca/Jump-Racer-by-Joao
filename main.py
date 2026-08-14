@@ -712,11 +712,26 @@ print("Janela do jogo aberta! Se o ENTER não responder na tela de "
       "terminal, estiver em primeiro plano) e tente de novo.")
 clock = pygame.time.Clock()
 
-font_big = pygame.font.SysFont("arial", 56, bold=True)
-font_med = pygame.font.SysFont("arial", 28, bold=True)
-font_small = pygame.font.SysFont("arial", 19)
-font_title = pygame.font.SysFont("arial", 72, bold=True)
-font_track_label = pygame.font.SysFont("arial", 19, bold=True)
+def make_font(size, bold=False):
+    """No Android, pygame.font.SysFont() tenta rodar o comando 'fc-list'
+    do sistema pra descobrir as fontes instaladas — e o Android não
+    tem esse comando nem permite esse tipo de execução, o que
+    derrubava o app com PermissionError. Usamos a fonte embutida do
+    próprio pygame nesse caso (não depende do sistema operacional);
+    no Windows/Mac/Linux continuamos usando a Arial normalmente.
+    """
+    if IS_ANDROID:
+        f = pygame.font.Font(None, size)
+        f.set_bold(bold)
+        return f
+    return pygame.font.SysFont("arial", size, bold=bold)
+
+
+font_big = make_font(56, bold=True)
+font_med = make_font(28, bold=True)
+font_small = make_font(19)
+font_title = make_font(72, bold=True)
+font_track_label = make_font(19, bold=True)
 
 music_on = True
 music_sound = None
