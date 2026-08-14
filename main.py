@@ -704,7 +704,13 @@ try:
 except pygame.error:
     MUSIC_OK = False
 
-screen = pygame.display.set_mode((WIDTH, HEIGHT))
+if IS_ANDROID:
+    # No Android, preenche a tela inteira do celular. O SCALED faz o
+    # pygame esticar nosso jogo (pensado pra 960x600) pra caber
+    # direitinho em qualquer tamanho de tela, mantendo a proporção.
+    screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.FULLSCREEN | pygame.SCALED)
+else:
+    screen = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("Super Jump Racer")
 print("Janela do jogo aberta! Se o ENTER não responder na tela de "
       "título, clique uma vez dentro da janela do jogo pra dar foco "
