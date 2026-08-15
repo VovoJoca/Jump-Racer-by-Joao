@@ -1465,7 +1465,7 @@ def draw_title_screen(surf, t, selected_color_idx, difficulty, track_theme):
         surf.blit(dsc, dsc.get_rect(center=(rect.centerx, rect.centery + 16)))
 
     if IS_ANDROID:
-        start_rect = draw_tap_to_continue_button(surf, "COMEÇAR! (ou tecle ENTER)", HEIGHT - 33)
+        start_rect = draw_tap_to_continue_button(surf, "COMEÇAR!", HEIGHT - 33)
     else:
         hint = font_med.render("Pressione ENTER para começar!", True, (60, 45, 30))
         surf.blit(hint, hint.get_rect(center=(WIDTH // 2, HEIGHT - 33)))
@@ -1530,6 +1530,7 @@ def main():
     next_track_rect = None
     menu_rect = None
     touch_moving = False  # controle por toque: segurando o botão "ANDAR"?
+    touch_move_finger_id = None  # qual dedo específico está segurando o "ANDAR"
 
     def start_race(track_key, p_color, diff):
         """(Re)inicia uma corrida numa pista específica, trocando a
@@ -1643,20 +1644,24 @@ def main():
                 if start_rect and start_rect.collidepoint(mx, my):
                     begin_race_from_title()
 
-            elif event.type == pygame.MOUSEBUTTONDOWN and state == STATE_RACING and IS_ANDROID:
+            elif event.type == pygame.FINGERDOWN and state == STATE_RACING:
                 btns = race_touch_buttons()
-                if btns["move"].collidepoint(event.pos):
+                fx, fy = event.x * WIDTH, event.y * HEIGHT
+                if btns["move"].collidepoint(fx, fy):
+                    touch_move_finger_id = event.finger_id
                     touch_moving = True
-                elif btns["up"].collidepoint(event.pos):
+                elif btns["up"].collidepoint(fx, fy):
                     player.set_pos(player.target_pos - 1)
-                elif btns["down"].collidepoint(event.pos):
+                elif btns["down"].collidepoint(fx, fy):
                     player.set_pos(player.target_pos + 1)
-                elif btns["mute"].collidepoint(event.pos):
+                elif btns["mute"].collidepoint(fx, fy):
                     music_on = not music_on
                     set_music_volume(0.55 if music_on else 0.0)
 
-            elif event.type == pygame.MOUSEBUTTONUP and state == STATE_RACING and IS_ANDROID:
-                touch_moving = False
+            elif event.type == pygame.FINGERUP and state == STATE_RACING:
+                if event.finger_id == touch_move_finger_id:
+                    touch_moving = False
+                    touch_move_finger_id = None
 
             elif event.type == pygame.MOUSEBUTTONDOWN and state == STATE_TRACK_RESULT:
                 if next_track_rect and next_track_rect.collidepoint(event.pos):
@@ -1797,7 +1802,7 @@ def main():
                 if IS_ANDROID:
                     hint = font_small.render(f"Próxima pista: {next_track['label']}", True, (230, 230, 230))
                     screen.blit(hint, hint.get_rect(center=(WIDTH // 2, HEIGHT - 90)))
-                    next_track_rect = draw_tap_to_continue_button(screen, "PRÓXIMA PISTA! (ou ENTER)", HEIGHT - 45)
+                    next_track_rect = draw_tap_to_continue_button(screen, "PRÓXIMA PISTA!", HEIGHT - 45)
                 else:
                     hint = font_med.render(f"ENTER para a próxima pista: {next_track['label']}", True, (230, 230, 230))
                     screen.blit(hint, hint.get_rect(center=(WIDTH // 2, HEIGHT - 60)))
