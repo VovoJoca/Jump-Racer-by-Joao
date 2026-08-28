@@ -1255,6 +1255,25 @@ BAR_PIX = 6
 # --------------------------------------------------------------------------
 # CONTROLES POR TOQUE (celular/tablet sem teclado)
 # --------------------------------------------------------------------------
+def finger_event_to_logical_pos(event):
+    """Converte a posição normalizada (0.0-1.0) de um toque (FINGERDOWN/
+    FINGERUP) para coordenadas do NOSSO jogo (960x600). É preciso
+    fazer essa conta manualmente porque, no modo tela cheia (SCALED),
+    o pygame pode desenhar faixas pretas nas bordas (letterbox) quando
+    a proporção da tela do celular é diferente da nossa — e os eventos
+    de toque vêm relativos à tela FÍSICA inteira, não à área onde o
+    jogo é desenhado de verdade."""
+    win_w, win_h = pygame.display.get_window_size()
+    scale = min(win_w / WIDTH, win_h / HEIGHT)
+    drawn_w, drawn_h = WIDTH * scale, HEIGHT * scale
+    offset_x, offset_y = (win_w - drawn_w) / 2, (win_h - drawn_h) / 2
+
+    px, py = event.x * win_w, event.y * win_h
+    lx = (px - offset_x) / scale
+    ly = (py - offset_y) / scale
+    return lx, ly
+
+
 def race_touch_buttons():
     """Retângulos dos botões de toque durante a corrida."""
     return {
@@ -1646,7 +1665,7 @@ def main():
 
             elif event.type == pygame.FINGERDOWN and state == STATE_RACING:
                 btns = race_touch_buttons()
-                fx, fy = event.x * WIDTH, event.y * HEIGHT
+                fx, fy = finger_event_to_logical_pos(event)
                 if btns["move"].collidepoint(fx, fy):
                     touch_move_finger_id = event.finger_id
                     touch_moving = True
