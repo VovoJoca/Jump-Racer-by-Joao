@@ -1662,20 +1662,21 @@ def main():
                         difficulty = key
                 if start_rect and start_rect.collidepoint(mx, my):
                     begin_race_from_title()
-elif event.type == pygame.MOUSEBUTTONDOWN and state == STATE_RACING:
-    btns = race_touch_buttons()
-    if btns["move"].collidepoint(event.pos):
-        touch_moving = True
-    elif btns["up"].collidepoint(event.pos):
-        player.set_pos(player.target_pos - 1)
-    elif btns["down"].collidepoint(event.pos):
-        player.set_pos(player.target_pos + 1)
-    elif btns["mute"].collidepoint(event.pos):
-        music_on = not music_on
-        set_music_volume(0.55 if music_on else 0.0)
 
-elif event.type == pygame.MOUSEBUTTONUP and state == STATE_RACING:
-    touch_moving = False
+	    elif event.type == pygame.MOUSEBUTTONDOWN and state == STATE_RACING:
+                btns = race_touch_buttons()
+                if btns["move"].collidepoint(event.pos):
+                    touch_moving = True
+                elif btns["up"].collidepoint(event.pos):
+                    player.set_pos(player.target_pos - 1)
+                elif btns["down"].collidepoint(event.pos):
+                    player.set_pos(player.target_pos + 1)
+                elif btns["mute"].collidepoint(event.pos):
+                    music_on = not music_on
+                    set_music_volume(0.55 if music_on else 0.0)
+
+            elif event.type == pygame.MOUSEBUTTONUP and state == STATE_RACING:
+                touch_moving = False
 
             elif event.type == pygame.MOUSEBUTTONDOWN and state == STATE_TRACK_RESULT:
                 if next_track_rect and next_track_rect.collidepoint(event.pos):
