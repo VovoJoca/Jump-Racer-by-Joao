@@ -1296,7 +1296,7 @@ def draw_race_touch_buttons(surf, moving, music_enabled):
     tri = [(move.centerx - 22, move.centery - 30), (move.centerx - 22, move.centery + 30),
            (move.centerx + 30, move.centery)]
     pygame.draw.polygon(surf, (40, 30, 20), tri)
-    lbl = font_small.render("SEGURE", True, (40, 30, 20))
+    lbl = font_small.render("TOQUE", True, (40, 30, 20))
     surf.blit(lbl, lbl.get_rect(center=(move.centerx, move.bottom - 18)))
 
     for key, arrow in (("up", "▲"), ("down", "▼")):
@@ -1666,7 +1666,7 @@ def main():
             elif event.type == pygame.MOUSEBUTTONDOWN and state == STATE_RACING:
                 btns = race_touch_buttons()
                 if btns["move"].collidepoint(event.pos):
-                    touch_moving = True
+                    touch_moving = not touch_moving
                 elif btns["up"].collidepoint(event.pos):
                     player.set_pos(player.target_pos - 1)
                 elif btns["down"].collidepoint(event.pos):
@@ -1674,9 +1674,6 @@ def main():
                 elif btns["mute"].collidepoint(event.pos):
                     music_on = not music_on
                     set_music_volume(0.55 if music_on else 0.0)
-
-            elif event.type == pygame.MOUSEBUTTONUP and state == STATE_RACING:
-                touch_moving = False
 
             elif event.type == pygame.MOUSEBUTTONDOWN and state == STATE_TRACK_RESULT:
                 if next_track_rect and next_track_rect.collidepoint(event.pos):
