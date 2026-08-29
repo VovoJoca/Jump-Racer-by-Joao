@@ -1663,7 +1663,7 @@ def main():
                 if start_rect and start_rect.collidepoint(mx, my):
                     begin_race_from_title()
 
-        elif event.type == pygame.MOUSEBUTTONDOWN and state == STATE_RACING:
+            elif event.type == pygame.MOUSEBUTTONDOWN and state == STATE_RACING:
                 btns = race_touch_buttons()
                 if btns["move"].collidepoint(event.pos):
                     touch_moving = True
