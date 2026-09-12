@@ -100,8 +100,12 @@ BOB_HEIGHT = 16
 MAX_DT = 1.0 / 20.0        # trava o passo de tempo (evita saltos grandes em engasgos)
 COLLIDE_RADIUS = 24        # raio de detecção de estrela/espinho (mundo)
 
-RACER_COLORS = ["yellow", "blue", "red", "green"]
-COLOR_LABELS = {"yellow": "Amarelo", "blue": "Azul", "red": "Vermelho", "green": "Verde"}
+RACER_COLORS = ["yellow", "blue", "red", "green", "orange", "brown", "black", "purple", "white"]
+COLOR_LABELS = {
+    "yellow": "Amarelo", "blue": "Azul", "red": "Vermelho", "green": "Verde",
+    "orange": "Laranja", "brown": "Marrom", "black": "Preto", "purple": "Roxo",
+    "white": "Branco",
+}
 
 # faixas de velocidade da IA por dificuldade (relativas à sua velocidade base)
 DIFFICULTY_SKILL = {
@@ -173,6 +177,16 @@ TRACKS = [
      "sky_top": (140, 200, 255), "sky_bottom": (255, 255, 255),
      "side_color": (255, 255, 255), "track_color": (225, 240, 255), "track_edge": (180, 210, 240),
      "lane_line": (255, 210, 90), "obstacle_sprite": "spike", "decor": "ceu"},
+
+    {"key": "tabuleiro",  "n": 13, "label": "13. Jogos de Tabuleiro",
+     "sky_top": (250, 235, 210), "sky_bottom": (255, 248, 232),
+     "side_color": (120, 78, 48), "track_color": (238, 222, 190), "track_edge": (170, 140, 100),
+     "lane_line": (200, 60, 55), "obstacle_sprite": "tabuleiro", "decor": "tabuleiro"},
+
+    {"key": "laboratorio", "n": 14, "label": "14. Laboratório",
+     "sky_top": (205, 225, 235), "sky_bottom": (235, 245, 248),
+     "side_color": (150, 160, 168), "track_color": (222, 230, 233), "track_edge": (170, 180, 186),
+     "lane_line": (90, 200, 150), "obstacle_sprite": "laboratorio", "decor": "laboratorio"},
 ]
 TRACKS_BY_KEY = {t["key"]: t for t in TRACKS}
 
@@ -203,7 +217,8 @@ def ensure_sprites():
               [f"robot_{c}_squash.png" for c in RACER_COLORS] + \
               ["star.png", "spike.png", "cactus.png", "sun.png", "spring_tile.png", "finish_flag.png",
                "obstacle_neve.png", "obstacle_vulcao.png", "obstacle_floresta.png",
-               "obstacle_comida.png", "obstacle_assombrada.png"]
+               "obstacle_comida.png", "obstacle_assombrada.png",
+               "obstacle_tabuleiro.png", "obstacle_laboratorio.png"]
     if all(os.path.exists(os.path.join(ASSET_DIR, n)) for n in needed):
         return
     os.makedirs(ASSET_DIR, exist_ok=True)
@@ -256,6 +271,11 @@ def ensure_sprites():
         "blue":   ((60, 140, 235, 255), (140, 195, 250, 255)),
         "red":    ((230, 70, 60, 255),  (250, 140, 120, 255)),
         "green":  ((70, 190, 110, 255), (150, 235, 175, 255)),
+        "orange": ((255, 140, 30, 255), (255, 185, 110, 255)),
+        "brown":  ((140, 95, 55, 255),  (185, 140, 95, 255)),
+        "black":  ((55, 55, 60, 255),   (95, 95, 102, 255)),
+        "purple": ((150, 80, 200, 255), (195, 140, 230, 255)),
+        "white":  ((225, 228, 232, 255), (250, 251, 253, 255)),
     }
     for name, (main, hi) in VARIANTS.items():
         pal = dict(BASE_PALETTE)
@@ -380,6 +400,37 @@ def ensure_sprites():
         ".DSssssssSD....", ".DSSSSSSSSD....", "DDDDDDDDDDDD...",
     ]
     save_sprite(ghost_rows, os.path.join(ASSET_DIR, "obstacle_assombrada.png"), GHOST_PAL, scale=8)
+
+    # ---- dado (obstáculo da pista Jogos de Tabuleiro) ----
+    DICE_PAL = {
+        '.': (0, 0, 0, 0), 'D': (40, 30, 25, 255),
+        'W': (250, 248, 245, 255), 'w': (225, 222, 218, 255),
+        'K': (35, 35, 40, 255), 'R': (215, 55, 50, 255),
+    }
+    dice_rows = [
+        "DDDDDDDDDDDDD.", "DWWWWWWWWWWWD.", "DWK.W.W.WKWWD.",
+        "DWWWWWWWWWWWD.", "DWWKWWWWWKWWD.", "DWWWWWWWWWWWD.",
+        "DWK.W.W.WKWWD.", "DWWWWWWWWWWWD.", "DWWWWWWWWWWWD.",
+        "DWWWKWWWKWWWD.", "DWWWWWWWWWWWD.", "DwwwwwwwwwwwD",
+        "DDDDDDDDDDDDD",
+    ]
+    save_sprite(dice_rows, os.path.join(ASSET_DIR, "obstacle_tabuleiro.png"), DICE_PAL, scale=6)
+
+    # ---- frasco borbulhante (obstáculo da pista Laboratório) ----
+    FLASK_PAL = {
+        '.': (0, 0, 0, 0), 'D': (35, 40, 45, 255),
+        'G': (150, 230, 100, 255), 'g': (200, 250, 150, 255),
+        'S': (210, 230, 235, 255), 's': (240, 250, 252, 255),
+        'B': (255, 255, 255, 200),
+    }
+    flask_rows = [
+        "....DSSD.......", "....DSSD.......", "....DSSD.......",
+        "...DSssSD......", "...DSssSD......", "..DSGggGSD.....",
+        ".DSGGgGgGSD....", ".DGGgGGGgGGD...", "DGGgGGBGGgGGD..",
+        "DGGGgGGGgGGGD..", "DGgGGGgGGGgGD..", "DGGGgGGGGgGGD..",
+        ".DGGGGgGGGGD...", "..DDDDDDDDD....",
+    ]
+    save_sprite(flask_rows, os.path.join(ASSET_DIR, "obstacle_laboratorio.png"), FLASK_PAL, scale=7)
 
     # ---- sol (decoração da pista deserto) ----
     sun_size = 96
@@ -831,11 +882,13 @@ vulcao_img = load("obstacle_vulcao.png", (44, 40))
 floresta_img = load("obstacle_floresta.png", (42, 40))
 comida_img = load("obstacle_comida.png", (36, 40))
 assombrada_img = load("obstacle_assombrada.png", (40, 40))
+tabuleiro_img = load("obstacle_tabuleiro.png", (38, 38))
+laboratorio_img = load("obstacle_laboratorio.png", (36, 40))
 sun_img = load("sun.png", (72, 72))
 OBSTACLE_IMG = {
     "spike": spike_img, "cactus": cactus_img, "neve": neve_img,
     "vulcao": vulcao_img, "floresta": floresta_img, "comida": comida_img,
-    "assombrada": assombrada_img,
+    "assombrada": assombrada_img, "tabuleiro": tabuleiro_img, "laboratorio": laboratorio_img,
 }
 spring_img = load("spring_tile.png", (48, 30))
 flag_img = load("finish_flag.png", (32, 24))
@@ -1122,6 +1175,39 @@ def draw_sky_decor(surf, cam_x, decor):
             cy = 12 + (i % 3) * 16
             pygame.draw.ellipse(surf, (255, 255, 255), (cx, cy, 90, 30))
             pygame.draw.ellipse(surf, (255, 255, 255), (cx + 36, cy - 10, 60, 26))
+    elif decor == "tabuleiro":
+        # cartas de baralho e pecas de xadrez flutuando no "ceu" da mesa
+        off = int(cam_x * 0.12) % 240
+        card_colors = [(230, 60, 60), (40, 40, 45), (230, 60, 60), (40, 40, 45)]
+        for i in range(-1, 5):
+            dx = i * 240 - off + 60
+            cy = 14 + (i % 2) * 20
+            col = card_colors[i % len(card_colors)]
+            pygame.draw.rect(surf, (250, 248, 240), (dx, cy, 26, 36), border_radius=3)
+            pygame.draw.rect(surf, (60, 45, 30), (dx, cy, 26, 36), width=2, border_radius=3)
+            pygame.draw.circle(surf, col, (dx + 13, cy + 18), 7)
+        piece_off = int(cam_x * 0.18) % 300
+        for i in range(-1, 3):
+            dx = i * 300 - piece_off + 200
+            pygame.draw.polygon(surf, (50, 45, 40), [(dx - 10, 58), (dx + 10, 58), (dx + 5, 20), (dx - 5, 20)])
+            pygame.draw.circle(surf, (50, 45, 40), (dx, 16), 8)
+    elif decor == "laboratorio":
+        # bolhas subindo e uma helice de DNA estilizada ao fundo
+        bub_off = int(cam_x * 0.3) % 40
+        for i in range(20):
+            sx = (i * 61 - bub_off) % (WIDTH + 30) - 15
+            sy = 55 - ((i * 37 + int(cam_x * 0.5)) % 55)
+            r = 2 + (i % 3)
+            pygame.draw.circle(surf, (150, 220, 235), (int(sx), int(sy)), r, width=1)
+        dna_off = int(cam_x * 0.1) % 200
+        for i in range(-1, 5):
+            dx = i * 200 - dna_off + 100
+            for k in range(6):
+                yk = 4 + k * 9
+                spread = 14 * math.sin(k * 0.9)
+                pygame.draw.line(surf, (120, 200, 160), (dx - spread, yk), (dx + spread, yk), 2)
+                pygame.draw.circle(surf, (90, 170, 220), (int(dx - spread), yk), 2)
+                pygame.draw.circle(surf, (230, 110, 130), (int(dx + spread), yk), 2)
 
 
 def draw_ground_decor(surf, cam_x, decor):
@@ -1165,6 +1251,14 @@ def draw_ground_decor(surf, cam_x, decor):
             elif decor == "cidade":
                 pygame.draw.rect(surf, (70, 70, 75), (sx - 2, TRACK_TOP - 34, 4, 24))
                 pygame.draw.circle(surf, (255, 235, 150), (sx, TRACK_TOP - 36), 6)
+            elif decor == "tabuleiro":
+                img = pygame.transform.smoothscale(tabuleiro_img, (26, 26))
+                surf.blit(img, (sx - 13, TRACK_TOP - 38))
+                surf.blit(img, (sx - 13, TRACK_BOTTOM + 26))
+            elif decor == "laboratorio":
+                img = pygame.transform.smoothscale(laboratorio_img, (24, 26))
+                surf.blit(img, (sx - 12, TRACK_TOP - 40))
+                surf.blit(img, (sx - 12, TRACK_BOTTOM + 26))
         wx += spacing
         i += 1
 
@@ -1377,42 +1471,49 @@ def draw_title_screen(surf, t, selected_color_idx, difficulty, track_theme):
         pygame.draw.line(surf, color, (0, y), (WIDTH, y))
     pygame.draw.rect(surf, (94, 168, 96), (0, HEIGHT - 66, WIDTH, 66))
 
-    bob = math.sin(t * 3) * 5
+    bob = math.sin(t * 3) * 4
     title1 = font_title.render("SUPER JUMP", True, (255, 230, 60))
     title2 = font_title.render("RACER", True, (255, 120, 90))
-    surf.blit(title1, title1.get_rect(center=(WIDTH // 2, 62 + bob)))
-    surf.blit(title2, title2.get_rect(center=(WIDTH // 2, 122 + bob)))
+    surf.blit(title1, title1.get_rect(center=(WIDTH // 2, 54 + bob)))
+    surf.blit(title2, title2.get_rect(center=(WIDTH // 2, 104 + bob)))
 
     sub = font_small.render("escolha seu robô, a pista e a dificuldade", True, (60, 50, 40))
-    surf.blit(sub, sub.get_rect(center=(WIDTH // 2, 168)))
+    surf.blit(sub, sub.get_rect(center=(WIDTH // 2, 134)))
 
-    # ---- seleção de cor ----
-    color_rects = []
-    n = len(RACER_COLORS)
-    spacing = 132
-    start_x = WIDTH // 2 - spacing * (n - 1) / 2
-    cy_color = 240
-    for i, c in enumerate(RACER_COLORS):
-        cx = int(start_x + i * spacing)
-        rect = pygame.Rect(cx - 48, cy_color - 48, 96, 96)
-        color_rects.append(rect)
-        selected = (i == selected_color_idx)
-        bg = (255, 250, 220) if selected else (255, 255, 255)
-        pygame.draw.rect(surf, bg, rect, border_radius=12)
-        pygame.draw.rect(surf, (60, 45, 30), rect, width=4 if selected else 2, border_radius=12)
-        icon = ROBOT_ICON[c]
-        bob_i = math.sin(t * 3 + i) * (3 if selected else 0)
-        surf.blit(icon, (cx - icon.get_width() // 2, cy_color - icon.get_height() // 2 + int(bob_i)))
-        lbl = font_small.render(COLOR_LABELS[c], True, (60, 45, 30))
-        surf.blit(lbl, lbl.get_rect(center=(cx, cy_color + 60)))
+    # ---- seleção de cor (duas fileiras, já que agora são 9 opções) ----
+    color_rects = [None] * len(RACER_COLORS)
+    box = 72
+    spacing = 100
+    rows = [RACER_COLORS[0:5], RACER_COLORS[5:9]]
+    cy_rows = [193, 285]
+    idx_base = 0
+    for row, cy_color in zip(rows, cy_rows):
+        n_row = len(row)
+        start_x = WIDTH // 2 - spacing * (n_row - 1) / 2
+        for j, c in enumerate(row):
+            i = idx_base + j
+            cx = int(start_x + j * spacing)
+            rect = pygame.Rect(cx - box // 2, cy_color - box // 2, box, box)
+            color_rects[i] = rect
+            selected = (i == selected_color_idx)
+            bg = (255, 250, 220) if selected else (255, 255, 255)
+            pygame.draw.rect(surf, bg, rect, border_radius=10)
+            pygame.draw.rect(surf, (60, 45, 30), rect, width=4 if selected else 2, border_radius=10)
+            icon = pygame.transform.smoothscale(ROBOT_ICON[c], (48, 48))
+            bob_i = math.sin(t * 3 + i) * (3 if selected else 0)
+            surf.blit(icon, (cx - icon.get_width() // 2, cy_color - icon.get_height() // 2 + int(bob_i)))
+            lbl = font_small.render(COLOR_LABELS[c], True, (60, 45, 30))
+            surf.blit(lbl, lbl.get_rect(center=(cx, cy_color + box // 2 + 12)))
+        idx_base += n_row
 
-    # ---- seleção de pista (carrossel, já que são 12 opções) ----
+    # ---- seleção de pista (carrossel, já que são 14 opções) ----
     idx = next(i for i, tr in enumerate(TRACKS) if tr["key"] == track_theme)
-    cy_track = 372
-    card_w, card_h = 168, 84
+    cy_track = 400
+    card_w, card_h = 168, 70
+    big_card_w = 260  # maior que o das laterais, pra caber nomes de pista compridos
 
     def draw_track_card(cx, cfg, big):
-        w, h = (card_w, card_h) if big else (card_w - 30, card_h - 20)
+        w, h = (big_card_w, card_h) if big else (card_w - 30, card_h - 20)
         rect = pygame.Rect(cx - w // 2, cy_track - h // 2, w, h)
         bg = cfg["side_color"]
         luminance = 0.299 * bg[0] + 0.587 * bg[1] + 0.114 * bg[2]
@@ -1428,11 +1529,15 @@ def draw_title_screen(surf, t, selected_color_idx, difficulty, track_theme):
             surf.blit(small, (icon_rect.centerx - small.get_width() // 2,
                                icon_rect.centery - small.get_height() // 2))
         f = font_track_label if big else font_small
-        lbl = f.render(cfg["label"], True, text_col)
+        # nos cards laterais (menores), mostra só o número da pista pra
+        # nunca vazar da tela, não importa quão comprido seja o nome —
+        # o nome completo aparece no card grande (central)
+        text_to_show = cfg["label"] if big else f"{cfg['n']}º"
+        lbl = f.render(text_to_show, True, text_col)
         label_area = pygame.Rect(icon_rect.right + 6, rect.y, rect.right - icon_rect.right - 10, rect.height)
         lbl_rect = lbl.get_rect(center=label_area.center)
         if lbl_rect.width > label_area.width:
-            lbl = font_small.render(cfg["label"], True, text_col)
+            lbl = font_small.render(text_to_show, True, text_col)
             lbl_rect = lbl.get_rect(center=label_area.center)
         surf.blit(lbl, lbl_rect)
         return rect
@@ -1448,7 +1553,7 @@ def draw_title_screen(surf, t, selected_color_idx, difficulty, track_theme):
     surf.blit(arrow_l, arrow_l.get_rect(center=(WIDTH // 2 - 320, cy_track)))
     surf.blit(arrow_r, arrow_r.get_rect(center=(WIDTH // 2 + 320, cy_track)))
 
-    dots_y = cy_track + 58
+    dots_y = cy_track + 50
     dot_spacing = 14
     dots_start = WIDTH // 2 - dot_spacing * (len(TRACKS) - 1) / 2
     for i in range(len(TRACKS)):
@@ -1464,10 +1569,10 @@ def draw_title_screen(surf, t, selected_color_idx, difficulty, track_theme):
     diff_rects = {}
     diff_labels = [("facil", "FÁCIL", "adversários no seu ritmo"),
                    ("dificil", "DIFÍCIL", "adversários mais rápidos")]
-    dw, dh = 210, 70
+    dw, dh = 210, 60
     dspacing = 230
     dstart_x = WIDTH // 2 - dspacing / 2
-    cy_diff = 470
+    cy_diff = 500
     for i, (key, label, desc) in enumerate(diff_labels):
         dx = int(dstart_x + i * dspacing - dw / 2)
         rect = pygame.Rect(dx, cy_diff - dh // 2, dw, dh)
