@@ -1332,7 +1332,11 @@ def draw_minimap(surf, racers):
     my = 30
     pygame.draw.rect(surf, (0, 0, 0), (mx0 - 10, my - 12, mx1 - mx0 + 20, 24), border_radius=10)
     pygame.draw.line(surf, (255, 255, 255), (mx0, my), (mx1, my), 4)
-    dot_colors = {"yellow": (255, 205, 40), "blue": (70, 150, 240), "red": (235, 80, 70), "green": (80, 200, 120)}
+    dot_colors = {
+        "yellow": (255, 205, 40), "blue": (70, 150, 240), "red": (235, 80, 70), "green": (80, 200, 120),
+        "orange": (255, 140, 30), "brown": (140, 95, 55), "black": (55, 55, 60),
+        "purple": (150, 80, 200), "white": (225, 228, 232),
+    }
     for r in racers:
         frac = min(1.0, r.world_x / TRACK_LENGTH)
         dx = mx0 + (mx1 - mx0) * frac
