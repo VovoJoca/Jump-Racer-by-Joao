@@ -1015,7 +1015,7 @@ def _bico_vector(surf, cx, by, s, t, mood, facing, press, remote):
     return rp
 
 
-def draw_bicoliso(surf, cx, by, s=1.0, t=0.0, mood="normal", facing=1,
+def _draw_bicoliso_vector(surf, cx, by, s=1.0, t=0.0, mood="normal", facing=1,
                   press=False, remote=True):
     """Desenha o PROFESSOR BICOLISO — flamingo cientista maluco (jaleco
     rasgado, óculos steampunk, botas enormes e um controle remoto) — só
@@ -1038,7 +1038,71 @@ def draw_bicoliso(surf, cx, by, s=1.0, t=0.0, mood="normal", facing=1,
     return (ox + rp[0] * k, oy + rp[1] * k)
 
 
+# Arte oficial do Professor Bicoliso (assets/bicoliso.png, com fundo
+# transparente). Se o arquivo não estiver na pasta assets/, o jogo usa o
+# desenho feito por código (mais simples), então nunca quebra.
+try:
+    BICO_PHOTO = load("bicoliso.png")
+except (FileNotFoundError, pygame.error):
+    BICO_PHOTO = None
+_BICO_CACHE = {}
+_BICO_HAND = (0.80, 0.30)   # onde fica o controle na imagem (fração de largura/altura)
+
+
+def _bico_scaled(h, flip, red):
+    key = (h, flip, red)
+    if key not in _BICO_CACHE:
+        w = max(1, int(BICO_PHOTO.get_width() * h / BICO_PHOTO.get_height()))
+        img = pygame.transform.smoothscale(BICO_PHOTO, (w, h))
+        if flip:
+            img = pygame.transform.flip(img, True, False)
+        if red:
+            img = img.copy()
+            img.fill((70, 0, 0, 0), special_flags=pygame.BLEND_RGB_ADD)
+        _BICO_CACHE[key] = img
+    return _BICO_CACHE[key]
+
+
+def _draw_bicoliso_photo(surf, cx, by, s, t, mood, facing, press, remote):
+    h = max(8, int(250 * s))
+    flip = (facing == 1)           # a arte original olha pra ESQUERDA
+    img = _bico_scaled(h, flip, mood == "angry")
+    laugh = (mood == "laugh")
+    bounce = -abs(math.sin(t * 14)) * 7 * s if laugh else 0
+    angle = math.sin(t * 14) * 5 if laugh else math.sin(t * 3) * 1.2
+    rot = pygame.transform.rotate(img, angle) if abs(angle) > 0.2 else img
+    rect = rot.get_rect(midbottom=(int(cx), int(by + bounce)))
+    surf.blit(rot, rect)
+    if mood == "angry":
+        for k in range(3):
+            puff = (int(cx + (k - 1) * 18 * s), int(by - h - 6 * s - (t * 45 + k * 22) % 40))
+            pygame.draw.circle(surf, (235, 235, 240), puff, max(2, int((5 + k) * s)))
+    if not remote:
+        return None
+    nx = (1 - _BICO_HAND[0]) if flip else _BICO_HAND[0]
+    rp = (int(rect.left + nx * rect.width), int(rect.top + _BICO_HAND[1] * rect.height))
+    if press:
+        pygame.draw.circle(surf, (255, 240, 120), rp, max(4, int(14 * s)), 3)
+        for k in range(6):
+            a = k * math.pi / 3 + t * 6
+            pygame.draw.line(surf, (255, 240, 120), rp,
+                             (int(rp[0] + math.cos(a) * 24 * s), int(rp[1] + math.sin(a) * 24 * s)), 3)
+    return rp
+
+
+def draw_bicoliso(surf, cx, by, s=1.0, t=0.0, mood="normal", facing=1,
+                  press=False, remote=True):
+    """Professor Bicoliso (arte oficial se existir, senão o desenho de código).
+    (cx, by) = centro dos pés; facing +1 olha pra direita, -1 pra esquerda;
+    mood: "normal", "angry" ou "laugh". Devolve a posição do controle."""
+    if BICO_PHOTO is not None:
+        return _draw_bicoliso_photo(surf, cx, by, s, t, mood, facing, press, remote)
+    return _draw_bicoliso_vector(surf, cx, by, s, t, mood, facing, press, remote)
+
+
 def _build_bicoliso_sprite():
+    if BICO_PHOTO is not None:
+        return pygame.transform.flip(pygame.transform.smoothscale(BICO_PHOTO, (46, 82)), True, False)
     img = pygame.Surface((74, 74), pygame.SRCALPHA)
     draw_bicoliso(img, 32, 73, s=0.33, facing=1, remote=False)
     return img
