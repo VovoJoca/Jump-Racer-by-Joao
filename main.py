@@ -893,6 +893,160 @@ OBSTACLE_IMG = {
 spring_img = load("spring_tile.png", (48, 30))
 flag_img = load("finish_flag.png", (32, 24))
 
+# --------------------------------------------------------------------------
+# VISUAL DO MODO HISTÓRIA (zumbis e o VILÃO) — composto por cima dos
+# sprites de robô já existentes, usando só desenho do pygame (sem PIL),
+# pra não depender de nenhum arquivo de imagem novo em assets/.
+# --------------------------------------------------------------------------
+def _tint_zombie(img):
+    """Aplica um tom verde-pálido no sprite, pra parecer um robô-zumbi."""
+    tinted = img.copy()
+    tinted.fill((150, 255, 170, 255), special_flags=pygame.BLEND_RGBA_MULT)
+    return tinted
+
+
+ZOMBIE_IMG = {c: _tint_zombie(ROBOT_IMG[c]) for c in RACER_COLORS}
+ZOMBIE_SQUASH_IMG = {c: _tint_zombie(ROBOT_SQUASH_IMG[c]) for c in RACER_COLORS}
+
+
+def _bico_vector(surf, cx, by, s, t, mood, facing, press, remote):
+    """Desenho vetorial do Bicoliso (chamado por draw_bicoliso, que o
+    "pixeliza"). Unidades: 1.0 de escala ≈ 210 px de altura."""
+    f = facing
+    lw = lambda v: max(1, int(v * s))
+
+    def P(dx, dy):
+        return (int(cx + f * dx * s), int(by - dy * s))
+
+    pink, pink_d = (240, 140, 150), (200, 95, 115)
+    brown, brown_d = (88, 60, 52), (52, 34, 32)
+    coat, coat_d = (226, 233, 240), (130, 145, 165)
+    yellow, yellow_d = (244, 196, 44), (176, 128, 24)
+    laugh = (mood == "laugh")
+    tilt = math.sin(t * 14) * 4 if laugh else math.sin(t * 3) * 2
+
+    # penas escuras da cauda (atrás do corpo)
+    pygame.draw.polygon(surf, brown_d, [P(-22, 96), P(-62, 84), P(-48, 70), P(-66, 56),
+                                         P(-44, 50), P(-58, 36), P(-24, 46)])
+    pygame.draw.polygon(surf, brown, [P(-22, 92), P(-54, 82), P(-42, 68), P(-56, 56), P(-26, 54)])
+    # pernas finas
+    for off in (-14, 16):
+        pygame.draw.line(surf, pink, P(off * 0.7, 56), P(off, 20), lw(6))
+    # botas grandes com fivela
+    for off in (-14, 16):
+        boot = [P(off - 13, 20), P(off + 5, 20), P(off + 20, 12), P(off + 28, 6),
+                P(off + 26, 0), P(off - 13, 0)]
+        pygame.draw.polygon(surf, (112, 72, 46), boot)
+        pygame.draw.polygon(surf, brown_d, boot, lw(2))
+        pygame.draw.line(surf, (190, 150, 90), P(off - 12, 14), P(off + 6, 14), lw(3))
+        pygame.draw.rect(surf, (210, 190, 120), pygame.Rect(P(off - 2, 17)[0] - lw(2), P(off - 2, 17)[1],
+                                                           lw(4), lw(6)))
+    # peito emplumado marrom
+    chest = pygame.Rect(0, 0, lw(58), lw(66))
+    chest.center = P(2, 80)
+    pygame.draw.ellipse(surf, brown, chest)
+    pygame.draw.ellipse(surf, brown_d, chest, lw(2))
+    # jaleco rasgado (duas abas, abertas no meio)
+    left = [P(-36, 104), P(-4, 104), P(-8, 34), P(-18, 42), P(-26, 28), P(-32, 44), P(-40, 36)]
+    right = [P(10, 104), P(38, 100), P(42, 44), P(34, 30), P(26, 46), P(18, 32), P(12, 42)]
+    for flap in (left, right):
+        pygame.draw.polygon(surf, coat, flap)
+        pygame.draw.polygon(surf, coat_d, flap, lw(2))
+    pygame.draw.rect(surf, coat_d, pygame.Rect(*P(-30, 78), lw(12), lw(9)), lw(1))  # bolso
+    # pescoço fino e curvo
+    neck = [P(6, 104), P(18, 128), P(8, 152), P(18 + tilt, 174)]
+    for a, b in zip(neck[:-1], neck[1:]):
+        pygame.draw.line(surf, pink, a, b, lw(10))
+    for p in neck:
+        pygame.draw.circle(surf, pink, p, max(2, int(5 * s)))
+    # cabeça
+    head = P(22 + tilt, 188)
+    pygame.draw.circle(surf, pink, head, lw(21))
+    pygame.draw.circle(surf, pink_d, head, lw(21), lw(2))
+    # bico grande, amarelo, curvado pra baixo
+    op = 9 if (laugh and math.sin(t * 14) > -0.2) else 0
+    top = [P(34 + tilt, 192 + op), P(66 + tilt, 190 + op), P(86 + tilt, 170 + op),
+           P(90 + tilt, 148 + op), P(78 + tilt, 158 + op), P(58 + tilt, 170 + op), P(34 + tilt, 172 + op)]
+    if op:
+        pygame.draw.polygon(surf, (140, 40, 55), [P(34 + tilt, 172), P(70 + tilt, 166), P(34 + tilt, 160)])
+        low = [P(34 + tilt, 166), P(62 + tilt, 158), P(78 + tilt, 140), P(66 + tilt, 148), P(34 + tilt, 156)]
+        pygame.draw.polygon(surf, yellow_d, low)
+    pygame.draw.polygon(surf, yellow, top)
+    pygame.draw.polygon(surf, yellow_d, top, lw(2))
+    pygame.draw.line(surf, yellow_d, P(36 + tilt, 182 + op), P(78 + tilt, 166 + op), lw(2))
+    # olho
+    eye = P(32 + tilt, 190)
+    pygame.draw.circle(surf, (255, 255, 255), eye, max(2, int(5 * s)))
+    pygame.draw.circle(surf, (30, 20, 30), (eye[0] + int(f * s), eye[1]), max(1, int(2.5 * s)))
+    # óculos steampunk na testa (lentes com luzinhas verde/vermelha)
+    pygame.draw.line(surf, (50, 55, 62), P(-2 + tilt, 200), P(44 + tilt, 205), lw(8))
+    for (gx, gy, r, col) in ((8, 201, 7, (230, 70, 60)), (24, 204, 11, (70, 235, 100)),
+                              (40, 205, 6, (255, 210, 70))):
+        c = P(gx + tilt, gy)
+        pygame.draw.circle(surf, (72, 78, 88), c, max(3, int(r * 1.3 * s)))
+        pygame.draw.circle(surf, col, c, max(2, int(r * s)))
+    # bravo: sobrancelha + fumaça
+    if mood == "angry":
+        pygame.draw.line(surf, (190, 35, 35), P(14 + tilt, 196), P(42 + tilt, 188), lw(4))
+        for k in range(3):
+            puff = P(-6 + k * 14, 222 + (t * 45 + k * 22) % 40)
+            pygame.draw.circle(surf, (235, 235, 240), puff, max(2, int((5 + k) * s)))
+
+    rp = None
+    if remote:
+        # braço rosa saindo da manga do jaleco
+        pygame.draw.line(surf, coat, P(26, 100), P(48, 108), lw(11))
+        pygame.draw.line(surf, pink, P(48, 108), P(62, 112), lw(6))
+        box = [P(56, 102), P(76, 104), P(75, 126), P(55, 124)]
+        pygame.draw.polygon(surf, (60, 66, 82), box)
+        pygame.draw.polygon(surf, (150, 160, 175), box, lw(2))
+        for (dx, dy, col) in ((60, 118, (230, 70, 60)), (66, 118, (250, 210, 70)), (72, 118, (80, 160, 240))):
+            pygame.draw.circle(surf, col, P(dx, dy), max(1, int(2.2 * s)))
+        rp = P(65, 108)
+        pygame.draw.circle(surf, (235, 45, 45), rp, max(2, int(5 * s)))
+        pygame.draw.line(surf, (60, 66, 82), P(66, 126), P(70, 138), lw(2))
+        pygame.draw.circle(surf, (110, 255, 130), P(70, 139), max(2, int(3 * s)))
+        if press:
+            pygame.draw.circle(surf, (255, 240, 120), rp, max(3, int(12 * s)), lw(3))
+            for k in range(6):
+                a = k * math.pi / 3 + t * 6
+                pygame.draw.line(surf, (255, 240, 120), rp,
+                                 (int(rp[0] + math.cos(a) * 20 * s), int(rp[1] + math.sin(a) * 20 * s)), lw(2))
+    return rp
+
+
+def draw_bicoliso(surf, cx, by, s=1.0, t=0.0, mood="normal", facing=1,
+                  press=False, remote=True):
+    """Desenha o PROFESSOR BICOLISO — flamingo cientista maluco (jaleco
+    rasgado, óculos steampunk, botas enormes e um controle remoto) — só
+    com formas do pygame, "pixelizado" pra combinar com o resto do jogo.
+    (cx, by) = centro dos pés. s = escala (1.0 ≈ 210 px de altura).
+    facing: +1 olha pra direita, -1 pra esquerda.
+    mood: "normal", "angry" (bravo, soltando fumaça) ou "laugh" (gargalhando).
+    Devolve a posição do botão do controle remoto (ou None)."""
+    k = 3 if s >= 0.6 else (2 if s >= 0.4 else 1)
+    tw = int(310 * s / k) + 4
+    th = int(255 * s / k) + 4
+    tmp = pygame.Surface((tw, th), pygame.SRCALPHA)
+    rp = _bico_vector(tmp, tw / 2.0, th - 2, s / k, t, mood, facing, press, remote)
+    big = pygame.transform.scale(tmp, (tw * k, th * k)) if k > 1 else tmp
+    ox = int(cx - tw * k / 2.0)
+    oy = int(by - (th - 2) * k)
+    surf.blit(big, (ox, oy))
+    if rp is None:
+        return None
+    return (ox + rp[0] * k, oy + rp[1] * k)
+
+
+def _build_bicoliso_sprite():
+    img = pygame.Surface((74, 74), pygame.SRCALPHA)
+    draw_bicoliso(img, 32, 73, s=0.33, facing=1, remote=False)
+    return img
+
+
+VILLAIN_IMG = _build_bicoliso_sprite()
+VILLAIN_SQUASH_IMG = pygame.transform.smoothscale(VILLAIN_IMG, (84, 46))
+
 BPM = 150
 BEAT_DUR = 60.0 / BPM
 BAR_DUR = BEAT_DUR * 4
@@ -925,7 +1079,8 @@ def generate_track(seed=None, obstacle_prob=0.5):
 # CORREDOR
 # --------------------------------------------------------------------------
 class Racer:
-    def __init__(self, color, name, pos, is_player=False, skill=1.0):
+    def __init__(self, color, name, pos, is_player=False, skill=1.0,
+                 is_zombie=False, is_villain=False):
         self.color = color
         self.name = name
         self.pos = pos
@@ -933,6 +1088,8 @@ class Racer:
         self.pos_visual = float(pos)
         self.is_player = is_player
         self.skill = skill
+        self.is_zombie = is_zombie    # modo HISTÓRIA, Cenário 1: anda devagar e errático
+        self.is_villain = is_villain  # modo HISTÓRIA, Cenário 2: o VILÃO perseguido
         self.world_x = 0.0
         self.boost_timer = 0.0   # segundos restantes de boost (tempo real)
         self.stun_timer = 0.0    # segundos restantes de atordoamento (tempo real)
@@ -966,6 +1123,11 @@ class Racer:
         # "frame de 1/60s", então multiplicamos por 60 pra virar taxa/seg)
         if self.is_player:
             speed = (BASE_SPEED * 60.0 * self.skill * self.current_speed_mult()) if moving else 0.0
+        elif self.is_zombie:
+            # zumbis sempre mais lentos que o jogador, sem "elástico" com o
+            # líder — é pra serem alcançados, não pra competir pela corrida.
+            base = BASE_SPEED * 60.0 * self.skill * 0.72
+            speed = base * self.current_speed_mult()
         else:
             base = BASE_SPEED * 60.0 * self.skill
             diff = leader_world_x - self.world_x
@@ -994,13 +1156,17 @@ class Racer:
         if not self.is_player:
             self.ai_decision_cooldown -= dt * 60.0
             if self.ai_decision_cooldown <= 0:
-                self.ai_decision_cooldown = 20
+                self.ai_decision_cooldown = 12 if self.is_zombie else 20
                 lookahead = 220
                 danger = any(
                     ob["pos"] == self.target_pos and 0 < ob["x"] - self.world_x < lookahead
                     for ob in obstacles
                 )
-                if danger:
+                # zumbis também trocam de posição "sem motivo" de vez em
+                # quando, de forma errática — reforça o jeito "zumbi" de
+                # andar, mesmo sem nenhum obstáculo por perto.
+                shamble = self.is_zombie and random.random() < 0.4
+                if danger or shamble:
                     free = [p for p in range(POSITIONS)
                             if not any(ob["pos"] == p and 0 < ob["x"] - self.world_x < lookahead for ob in obstacles)]
                     if free:
@@ -1047,11 +1213,17 @@ class Racer:
     def draw(self, surf, cam_x):
         sx, sy = self.screen_pos(cam_x)
         if -80 < sx < WIDTH + 80:
+            if self.is_villain:
+                normal_img, squash_img = VILLAIN_IMG, VILLAIN_SQUASH_IMG
+            elif self.is_zombie:
+                normal_img, squash_img = ZOMBIE_IMG[self.color], ZOMBIE_SQUASH_IMG[self.color]
+            else:
+                normal_img, squash_img = ROBOT_IMG[self.color], ROBOT_SQUASH_IMG[self.color]
             if self.squash_timer > 0:
-                img = ROBOT_SQUASH_IMG[self.color]
+                img = squash_img
                 surf.blit(img, (sx - img.get_width() // 2, sy - img.get_height() + 10))
             else:
-                img = ROBOT_IMG[self.color]
+                img = normal_img
                 surf.blit(img, (sx - img.get_width() // 2, sy - img.get_height()))
             if self.stun_timer > 0:
                 dizzy = font_small.render("*", True, (255, 230, 60))
@@ -1336,6 +1508,7 @@ def draw_minimap(surf, racers):
         "yellow": (255, 205, 40), "blue": (70, 150, 240), "red": (235, 80, 70), "green": (80, 200, 120),
         "orange": (255, 140, 30), "brown": (140, 95, 55), "black": (55, 55, 60),
         "purple": (150, 80, 200), "white": (225, 228, 232),
+        "villain": (250, 130, 170),
     }
     for r in racers:
         frac = min(1.0, r.world_x / TRACK_LENGTH)
@@ -1603,8 +1776,415 @@ def draw_title_screen(surf, t, selected_color_idx, difficulty, track_theme):
 
 
 # --------------------------------------------------------------------------
+# TELA INICIAL (HISTÓRIA / CORRIDA)
+# --------------------------------------------------------------------------
+def draw_splash_screen(surf, t):
+    for y in range(HEIGHT):
+        tt = y / HEIGHT
+        color = tuple(int(SKY_TOP[i] + (SKY_BOTTOM[i] - SKY_TOP[i]) * tt) for i in range(3))
+        pygame.draw.line(surf, color, (0, y), (WIDTH, y))
+    pygame.draw.rect(surf, (94, 168, 96), (0, HEIGHT - 66, WIDTH, 66))
+
+    bob = math.sin(t * 2.4) * 6
+    title1 = font_title.render("SUPER JUMP", True, (255, 230, 60))
+    title2 = font_title.render("RACER", True, (255, 120, 90))
+    surf.blit(title1, title1.get_rect(center=(WIDTH // 2, 160 + bob)))
+    surf.blit(title2, title2.get_rect(center=(WIDTH // 2, 220 + bob)))
+
+    icon = ROBOT_IMG["yellow"]
+    bobr = abs(math.sin(t * 3)) * 18
+    surf.blit(icon, (WIDTH // 2 - icon.get_width() // 2, 300 - bobr))
+
+    def draw_btn(cx, cy, label, bg):
+        lbl = font_med.render(label, True, (255, 255, 255))
+        w, h = 270, 76
+        rect = pygame.Rect(cx - w // 2, cy - h // 2, w, h)
+        s = pygame.Surface((w, h), pygame.SRCALPHA)
+        pygame.draw.rect(s, bg, s.get_rect(), border_radius=16)
+        pygame.draw.rect(s, (255, 255, 255, 230), s.get_rect(), width=3, border_radius=16)
+        surf.blit(s, rect.topleft)
+        surf.blit(lbl, lbl.get_rect(center=rect.center))
+        return rect
+
+    historia_rect = draw_btn(WIDTH // 2, 420, "HISTÓRIA", (110, 90, 200, 235))
+    corrida_rect = draw_btn(WIDTH // 2, 505, "CORRIDA", (90, 170, 90, 235))
+
+    hint_txt = ("toque num botão para escolher" if IS_ANDROID else
+                "clique num botão, ou ENTER = CORRIDA / H = HISTÓRIA")
+    hint = font_small.render(hint_txt, True, (50, 40, 30))
+    surf.blit(hint, hint.get_rect(center=(WIDTH // 2, 565)))
+    return historia_rect, corrida_rect
+
+
+# --------------------------------------------------------------------------
+# MODO HISTÓRIA — seleção de robô
+# --------------------------------------------------------------------------
+def draw_story_color_screen(surf, t, selected_color_idx):
+    for y in range(HEIGHT):
+        tt = y / HEIGHT
+        color = tuple(int(SKY_TOP[i] + (SKY_BOTTOM[i] - SKY_TOP[i]) * tt) for i in range(3))
+        pygame.draw.line(surf, color, (0, y), (WIDTH, y))
+    pygame.draw.rect(surf, (94, 168, 96), (0, HEIGHT - 66, WIDTH, 66))
+
+    title = font_big.render("MODO HISTÓRIA", True, (255, 230, 60))
+    surf.blit(title, title.get_rect(center=(WIDTH // 2, 68)))
+    sub = font_small.render("escolha seu robô para a perseguição", True, (60, 50, 40))
+    surf.blit(sub, sub.get_rect(center=(WIDTH // 2, 116)))
+
+    color_rects = [None] * len(RACER_COLORS)
+    box = 86
+    spacing = 118
+    rows = [RACER_COLORS[0:5], RACER_COLORS[5:9]]
+    cy_rows = [228, 350]
+    idx_base = 0
+    for row, cy_color in zip(rows, cy_rows):
+        n_row = len(row)
+        start_x = WIDTH // 2 - spacing * (n_row - 1) / 2
+        for j, c in enumerate(row):
+            i = idx_base + j
+            cx = int(start_x + j * spacing)
+            rect = pygame.Rect(cx - box // 2, cy_color - box // 2, box, box)
+            color_rects[i] = rect
+            selected = (i == selected_color_idx)
+            bg = (255, 250, 220) if selected else (255, 255, 255)
+            pygame.draw.rect(surf, bg, rect, border_radius=12)
+            pygame.draw.rect(surf, (60, 45, 30), rect, width=4 if selected else 2, border_radius=12)
+            icon = pygame.transform.smoothscale(ROBOT_ICON[c], (58, 58))
+            bob_i = math.sin(t * 3 + i) * (4 if selected else 0)
+            surf.blit(icon, (cx - icon.get_width() // 2, cy_color - icon.get_height() // 2 + int(bob_i)))
+            lbl = font_small.render(COLOR_LABELS[c], True, (60, 45, 30))
+            surf.blit(lbl, lbl.get_rect(center=(cx, cy_color + box // 2 + 14)))
+        idx_base += n_row
+
+    if IS_ANDROID:
+        confirm_rect = draw_tap_to_continue_button(surf, "COMEÇAR HISTÓRIA!", HEIGHT - 33)
+    else:
+        hint = font_med.render("Pressione ENTER para começar a história!", True, (60, 45, 30))
+        surf.blit(hint, hint.get_rect(center=(WIDTH // 2, HEIGHT - 33)))
+        confirm_rect = None
+
+    return color_rects, confirm_rect
+
+
+# --------------------------------------------------------------------------
+# MODO HISTÓRIA — CENÁRIO 3: tela final ("novo logo" + "FIM")
+# --------------------------------------------------------------------------
+def draw_story_end_screen(surf, t):
+    top = (255, 170, 110)
+    bottom = (255, 225, 160)
+    for y in range(HEIGHT):
+        tt = y / HEIGHT
+        color = tuple(int(top[i] + (bottom[i] - top[i]) * tt) for i in range(3))
+        pygame.draw.line(surf, color, (0, y), (WIDTH, y))
+
+    pygame.draw.circle(surf, (255, 225, 140), (WIDTH // 2, 300), 110)
+
+    pygame.draw.rect(surf, (90, 160, 190), (0, 360, WIDTH, HEIGHT - 360))
+    for i in range(10):
+        wy = 375 + i * 20
+        off = int(t * 40 + i * 37) % 60
+        for wx in range(-60 + off, WIDTH, 60):
+            pygame.draw.arc(surf, (210, 235, 245), (wx, wy, 44, 14), 3.4, 6.0, 2)
+
+    pygame.draw.rect(surf, (235, 210, 160), (0, 520, WIDTH, HEIGHT - 520))
+
+    cheer_colors = ["yellow", "blue", "red", "green"]
+    cx0 = WIDTH // 2 - 150
+    for i, c in enumerate(cheer_colors):
+        bobr = abs(math.sin(t * 3 + i)) * 14
+        icon = ROBOT_IMG[c]
+        surf.blit(icon, (cx0 + i * 100 - icon.get_width() // 2, 470 - bobr))
+
+    bob = math.sin(t * 2) * 5
+    shadow1 = font_title.render("SUPER JUMP", True, (90, 50, 20))
+    shadow2 = font_title.render("RACERS", True, (90, 50, 20))
+    title1 = font_title.render("SUPER JUMP", True, (255, 255, 255))
+    title2 = font_title.render("RACERS", True, (255, 240, 90))
+    surf.blit(shadow1, shadow1.get_rect(center=(WIDTH // 2 + 3, 63 + bob)))
+    surf.blit(title1, title1.get_rect(center=(WIDTH // 2, 60 + bob)))
+    surf.blit(shadow2, shadow2.get_rect(center=(WIDTH // 2 + 3, 113 + bob)))
+    surf.blit(title2, title2.get_rect(center=(WIDTH // 2, 110 + bob)))
+
+    for i in range(14):
+        sxp = (i * 83 + int(t * 20)) % (WIDTH + 40) - 20
+        syp = 20 + (i * 29) % 40
+        pygame.draw.circle(surf, (255, 255, 255), (sxp, syp), 2)
+
+    fim_bob = math.sin(t * 2.5) * 6
+    fim_shadow = font_big.render("FIM", True, (120, 60, 20))
+    fim = font_big.render("FIM", True, (255, 255, 255))
+    big_fim = pygame.transform.smoothscale(fim, (int(fim.get_width() * 1.8), int(fim.get_height() * 1.8)))
+    big_fim_shadow = pygame.transform.smoothscale(
+        fim_shadow, (int(fim_shadow.get_width() * 1.8), int(fim_shadow.get_height() * 1.8)))
+    surf.blit(big_fim_shadow, big_fim_shadow.get_rect(center=(WIDTH // 2 + 4, 234 + fim_bob)))
+    surf.blit(big_fim, big_fim.get_rect(center=(WIDTH // 2, 230 + fim_bob)))
+
+    sub = font_small.render("Obrigado por jogar Super Jump Racer!", True, (70, 40, 20))
+    surf.blit(sub, sub.get_rect(center=(WIDTH // 2, 300)))
+
+    if IS_ANDROID:
+        back_rect = draw_tap_to_continue_button(surf, "CONTINUAR", HEIGHT - 33)
+    else:
+        hint = font_med.render("Pressione ENTER para continuar", True, (70, 40, 20))
+        surf.blit(hint, hint.get_rect(center=(WIDTH // 2, HEIGHT - 33)))
+        back_rect = None
+    return back_rect
+
+
+# --------------------------------------------------------------------------
+# MODO HISTÓRIA — CUTSCENES (pequenos "filmes" animados, 100% desenhados
+# com formas do pygame e os sprites que já existem)
+# --------------------------------------------------------------------------
+CUTSCENE_DUR = {"intro": 14.5, "lab_arrival": 11.0, "victory": 13.0, "laugh": 12.5}
+_CUT_ROBOT_CACHE = {}
+
+
+def _ease(x):
+    x = max(0.0, min(1.0, x))
+    return x * x * (3 - 2 * x)
+
+
+def _seg(t, a, b):
+    return max(0.0, min(1.0, (t - a) / (b - a)))
+
+
+def _cut_robot(color, zombie, size=100):
+    key = (color, zombie, size)
+    if key not in _CUT_ROBOT_CACHE:
+        base = ZOMBIE_IMG[color] if zombie else ROBOT_IMG[color]
+        _CUT_ROBOT_CACHE[key] = pygame.transform.smoothscale(base, (size, size))
+    return _CUT_ROBOT_CACHE[key]
+
+
+def _wrap_text(text, font, max_w):
+    words, lines, cur = text.split(" "), [], ""
+    for w in words:
+        trial = (cur + " " + w).strip()
+        if font.size(trial)[0] <= max_w:
+            cur = trial
+        else:
+            lines.append(cur)
+            cur = w
+    if cur:
+        lines.append(cur)
+    return lines
+
+
+def _draw_caption(surf, speaker, text, elapsed):
+    box = pygame.Surface((WIDTH - 60, 112), pygame.SRCALPHA)
+    pygame.draw.rect(box, (10, 8, 20, 205), box.get_rect(), border_radius=14)
+    pygame.draw.rect(box, (255, 255, 255, 220), box.get_rect(), width=3, border_radius=14)
+    surf.blit(box, (30, HEIGHT - 134))
+    y = HEIGHT - 124
+    if speaker:
+        sp = font_small.render(speaker, True, (255, 220, 90))
+        surf.blit(sp, (50, y))
+        y += 26
+    shown = text[: int(elapsed * 32)]
+    # quebra o texto COMPLETO em linhas (pra não "pular" durante a digitação)
+    full_lines = _wrap_text(text, font_med, WIDTH - 110)
+    count = len(shown)
+    for ln in full_lines:
+        part = ln[:max(0, count)]
+        count -= len(ln) + 1
+        if part:
+            surf.blit(font_med.render(part, True, (255, 255, 255)), (50, y))
+        y += 32
+
+
+def draw_cutscene(surf, cid, ct, pc):
+    """Desenha o quadro da cutscene `cid` no instante `ct` (segundos).
+    pc = cor do robô que o jogador escolheu."""
+    bg = "cidade" if cid == "intro" else "laboratorio"
+    draw_background(surf, 0, bg)
+    others = [c for c in RACER_COLORS if c != pc][:3]
+    pc_name = f"Robô {COLOR_LABELS[pc]}"
+    layer = None
+    caps = []
+    flash = 0
+    robots = []      # (y_base, color, zombie, x, run, wobble)
+    bico = None      # dict de argumentos de draw_bicoliso
+    extras = []      # funções de desenho extra (depois dos personagens)
+
+    if cid == "intro":
+        ys = [440, 410, 450, 425]
+        zombie = ct >= 6.35
+        run = _seg(ct, 9.5, 11.0)
+        px = 150 + 100 * _ease(run)
+        conv = _ease(_seg(ct, 9.5, 12.0))
+        init = [330, 450, 570]
+        final = [350, 410, 470]
+        robots.append((ys[0], pc, False, px, 0 < run < 1, 0))
+        for i, c in enumerate(others):
+            x = init[i] + (final[i] - init[i]) * conv
+            wob = math.sin(ct * 5 + i) * 4 if zombie else 0
+            robots.append((ys[i + 1], c, zombie, x, False, wob))
+        if ct >= 3.0:
+            enter = _ease(_seg(ct, 3.0, 4.6))
+            flee = _ease(_seg(ct, 9.5, 12.5))
+            bx = 1100 + (790 - 1100) * enter + 560 * flee
+            angry = 7.0 <= ct < 9.5
+            press = (5.6 <= ct < 6.0) or (angry and (ct * 3) % 1 < 0.35)
+            shake = math.sin(ct * 40) * 3 if angry else 0
+            bico = dict(cx=bx + shake, by=470, s=0.78, t=ct, mood="angry" if angry else "normal",
+                        facing=1 if ct >= 9.5 else -1, press=press)
+        if 7.2 <= ct < 9.5:
+            def q(surf=surf):
+                qs = font_big.render("?", True, (255, 255, 255))
+                surf.blit(qs, (int(150 - 10), 300))
+            extras.append(q)
+        if 5.9 <= ct < 6.6:
+            flash = int(220 * (1 - (ct - 5.9) / 0.7))
+        caps = [(0.0, 3.0, "", "Os robôs passeavam tranquilos pela cidade..."),
+                (3.0, 5.6, "Professor Bicoliso", "Hahaha! Chegou a hora da minha invenção!"),
+                (5.6, 7.0, "Professor Bicoliso", "Aperta... o botão!!"),
+                (7.0, 9.5, "Professor Bicoliso", "O quê?! Por que ELE não virou zumbi?!"),
+                (9.5, 11.5, "@P", "Bicoliso, volta aqui!"),
+                (11.5, 14.5, "", "Mas os robôs zumbis bloqueiam o caminho!")]
+
+    elif cid == "lab_arrival":
+        run = _seg(ct, 0, 2.6)
+        px = -80 + 380 * _ease(run)
+        robots.append((440, pc, False, px, ct < 2.6, 0))
+        if ct >= 3.0:
+            bico = dict(cx=730, by=470, s=0.78 * (0.4 + 0.6 * _ease(_seg(ct, 3.0, 3.5))), t=ct,
+                        mood="normal", facing=-1, press=False)
+        if 2.9 <= ct < 4.2:
+            def smoke(surf=surf, ct=ct):
+                lay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+                k = (ct - 2.9) / 1.3
+                for i in range(7):
+                    ox = math.cos(i * 0.9) * 70 * k
+                    oy = math.sin(i * 1.7) * 50 * k
+                    pygame.draw.circle(lay, (230, 230, 235, int(190 * (1 - k))),
+                                       (int(730 + ox), int(400 + oy)), int(26 + 26 * k))
+                surf.blit(lay, (0, 0))
+            extras.append(smoke)
+        caps = [(0.0, 3.0, "", "O robô chegou ao Laboratório do Professor Bicoliso..."),
+                (3.0, 6.5, "Professor Bicoliso", "Você chegou longe, hein? Que tal uma corrida?"),
+                (6.5, 9.0, "Professor Bicoliso", "Se me vencer, eu desfaço o feitiço dos seus amigos!"),
+                (9.0, 11.0, "@P", "Aceito o desafio!")]
+
+    elif cid == "victory":
+        zombie = ct < 3.4
+        charge = _ease(_seg(ct, 6.0, 9.0))
+        init = [330, 420, 510]
+        robots.append((440, pc, False, 200 + 330 * charge, 6.0 <= ct < 9.5, 0))
+        for i, c in enumerate(others):
+            x = init[i] + 330 * charge
+            wob = math.sin(ct * 5 + i) * 4 if zombie else 0
+            robots.append(([410, 450, 425][i], c, zombie, x, 6.0 <= ct < 9.5, wob))
+        flee = _ease(_seg(ct, 7.0, 10.0))
+        bico = dict(cx=790 + 520 * flee, by=470, s=0.78, t=ct,
+                    mood="angry" if ct < 3.2 else "normal", facing=1 if ct >= 7.0 else -1, press=False)
+        if 3.2 <= ct < 3.9:
+            flash = int(220 * (1 - (ct - 3.2) / 0.7))
+        if 3.4 <= ct < 5.2:
+            def sparks(surf=surf, ct=ct):
+                for i in range(3):
+                    cx = 330 + i * 90 + int(math.sin(ct * 6 + i) * 6)
+                    for k in range(4):
+                        a = ct * 4 + k * math.pi / 2
+                        pygame.draw.circle(surf, (255, 240, 120),
+                                           (int(cx + math.cos(a) * 28), int(300 + math.sin(a) * 20)), 4)
+            extras.append(sparks)
+        caps = [(0.0, 3.0, "Professor Bicoliso", "Impossível! Eu perdi a corrida?!"),
+                (3.0, 5.5, "", "O feitiço se quebrou! Os robôs voltaram ao normal!"),
+                (5.5, 8.0, "Robôs", "Agora você vai ver só, Bicoliso!"),
+                (8.0, 11.0, "Professor Bicoliso", "Aaah! Isso não vai ficar assim! Eu volto!"),
+                (11.0, 13.0, "", "O Bicoliso fugiu!")]
+
+    elif cid == "laugh":
+        pass
+
+    if cid != "laugh":
+        for (yb, color, zomb, x, run, wob) in sorted(robots, key=lambda r: r[0]):
+            img = _cut_robot(color, zomb)
+            bob = abs(math.sin(ct * (9 if run else 3) + yb)) * (14 if run else 6)
+            pygame.draw.ellipse(surf, (35, 35, 40), (int(x - 28 + wob), int(yb - 6), 56, 10), 0)
+            surf.blit(img, (int(x - img.get_width() / 2 + wob), int(yb - img.get_height() - bob)))
+        if bico:
+            rp = draw_bicoliso(surf, **bico)
+            if cid == "intro" and 5.9 <= ct < 7.0 and rp:
+                lay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+                pygame.draw.circle(lay, (90, 255, 130, 160), rp, int((ct - 5.9) * 800), 10)
+                surf.blit(lay, (0, 0))
+        for fn in extras:
+            fn()
+    else:
+        dark = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        dark.fill((10, 20, 15, 110))
+        surf.blit(dark, (0, 0))
+        if math.sin(ct * 9) > 0.85:
+            lit = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+            lit.fill((150, 255, 170, 45))
+            surf.blit(lit, (0, 0))
+        laughing = ct < 7.5
+        dx = math.sin(ct * 30) * 4 if laughing else 0
+        draw_bicoliso(surf, 480 + dx, 458, s=1.1, t=ct, mood="laugh" if laughing else "normal",
+                      facing=-1 if int(ct * 1.2) % 2 else 1, remote=False)
+        if laughing:
+            for k in range(4):
+                yy = 330 - ((ct * 70 + k * 55) % 200)
+                has = font_med.render("HA!", True, (255, 240, 120))
+                surf.blit(has, (170 + k * 190 + int(math.sin(ct * 8 + k) * 10), int(yy + 120)))
+        caps = [(0.0, 3.8, "Professor Bicoliso", "Hahaha... vocês ganharam esta batalha..."),
+                (3.8, 7.5, "Professor Bicoliso", "...mas a guerra está só começando! MUAHAHAHA!")]
+        fade = _seg(ct, 7.5, 8.7)
+        if fade > 0:
+            blk = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+            blk.fill((0, 0, 0, int(255 * fade)))
+            surf.blit(blk, (0, 0))
+        if ct >= 8.9:
+            txt = font_big.render("CONTINUA...", True, (255, 255, 255))
+            txt.set_alpha(int(255 * _seg(ct, 8.9, 10.2)))
+            surf.blit(txt, txt.get_rect(center=(WIDTH // 2, HEIGHT // 2)))
+
+    if flash > 0:
+        fl = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        fl.fill((255, 255, 255, flash))
+        surf.blit(fl, (0, 0))
+
+    for (a, b, speaker, text) in caps:
+        if a <= ct < b:
+            _draw_caption(surf, pc_name if speaker == "@P" else speaker, text, ct - a)
+            break
+
+    hint = font_small.render("toque para pular" if IS_ANDROID else "ENTER: pular", True, (255, 255, 255))
+    surf.blit(hint, (WIDTH - hint.get_width() - 16, 12))
+
+
+# --------------------------------------------------------------------------
 # LOOP PRINCIPAL
 # --------------------------------------------------------------------------
+def new_story_race_ch1(player_color, track_key):
+    """Modo HISTÓRIA, CENÁRIO 1: o robô escolhido persegue 3 zumbis
+    (sempre mais lentos e com movimento errático) pelas pistas 1-13."""
+    track_cfg = TRACKS_BY_KEY[track_key]
+    obstacles, stars = generate_track(obstacle_prob=track_obstacle_prob(track_cfg))
+    other_colors = [c for c in RACER_COLORS if c != player_color][:3]
+    player = Racer(player_color, "Você", pos=1, is_player=True, skill=1.0)
+    ai_positions = [p for p in range(POSITIONS) if p != 1]
+    zumbis = [
+        Racer(other_colors[i], f"Zumbi {COLOR_LABELS[other_colors[i]]}",
+              pos=ai_positions[i % len(ai_positions)], skill=random.uniform(0.85, 0.98),
+              is_zombie=True)
+        for i in range(3)
+    ]
+    return [player] + zumbis, obstacles, stars
+
+
+def new_story_race_ch2(player_color, track_key):
+    """Modo HISTÓRIA, CENÁRIO 2: só o robô escolhido e o VILÃO, na
+    pista do Laboratório (14)."""
+    track_cfg = TRACKS_BY_KEY[track_key]
+    obstacles, stars = generate_track(obstacle_prob=track_obstacle_prob(track_cfg))
+    player = Racer(player_color, "Você", pos=1, is_player=True, skill=1.0)
+    vilao = Racer("villain", "Professor Bicoliso", pos=2, skill=random.uniform(0.98, 1.04),
+                  is_villain=True)
+    return [player, vilao], obstacles, stars
+
+
 def new_race(player_color, difficulty, track_key):
     track_cfg = TRACKS_BY_KEY[track_key]
     obstacles, stars = generate_track(obstacle_prob=track_obstacle_prob(track_cfg))
@@ -1626,6 +2206,7 @@ def new_race(player_color, difficulty, track_key):
 def main():
     global music_on
 
+    STATE_SPLASH = "splash"                # NOVA tela inicial: HISTÓRIA ou CORRIDA
     STATE_TITLE = "title"
     STATE_COUNTDOWN = "countdown"
     STATE_RACING = "racing"
@@ -1633,10 +2214,32 @@ def main():
     STATE_TRACK_RESULT = "track_result"    # resultado de UMA pista dentro da campanha
     STATE_CAMPAIGN_FINISHED = "campaign_finished"  # resultado final das 12 pistas
 
-    state = STATE_TITLE
+    # ---- modo HISTÓRIA ----
+    STATE_STORY_COLOR_SELECT = "story_color_select"
+    STATE_STORY_TRACK_RESULT = "story_track_result"      # fim de UMA pista no Cenário 1
+    STATE_STORY_VILLAIN_RESULT = "story_villain_result"  # fim da pista do Cenário 2
+    STATE_STORY_END = "story_end"                        # Cenário 3: "novo logo" + FIM
+    STATE_CUTSCENE = "cutscene"                          # filminhos da história
+
+    state = STATE_SPLASH
     selected_color_idx = 0
     difficulty = "facil"
     track_theme = "cidade"
+
+    # ---- modo HISTÓRIA: estado da campanha narrativa ----
+    story_mode = False
+    story_chapter = 1          # 1 = perseguição aos zumbis (pistas 1-13), 2 = VILÃO (pista 14)
+    story_track_idx = 0        # índice em TRACKS (0..12) durante o Cenário 1
+    story_player_color = None
+    historia_rect = None
+    corrida_rect = None
+    story_color_rects = []
+    story_confirm_rect = None
+    story_next_rect = None
+    story_continue_rect = None
+    story_back_rect = None
+    cutscene_id = None
+    cutscene_t = 0.0
 
     # ---- campanha (obrigatória quando o jogador começa pela pista 1) ----
     POINTS_TABLE = {1: 5, 2: 4, 3: 3, 4: 2}
@@ -1689,6 +2292,64 @@ def main():
             campaign_mode = False
         start_race(track_theme, player_color, difficulty)
 
+    def start_story_race(chapter, track_key, p_color):
+        """(Re)inicia uma corrida do modo HISTÓRIA (zumbis no Cenário 1,
+        ou o VILÃO no Cenário 2), trocando a música da pista."""
+        nonlocal racers, obstacles, stars, player, race_theme, countdown_timer, results, state
+        if chapter == 1:
+            racers, obstacles, stars = new_story_race_ch1(p_color, track_key)
+        else:
+            racers, obstacles, stars = new_story_race_ch2(p_color, track_key)
+        player = racers[0]
+        race_theme = track_key
+        track_music_path = find_track_music(TRACKS_BY_KEY[track_key]["n"]) or MUSIC_PATH
+        switch_music(track_music_path)
+        set_music_volume(0.55 if music_on else 0.0)
+        state = STATE_COUNTDOWN
+        countdown_timer = 3.0
+        results = []
+
+    def begin_story():
+        nonlocal story_mode, story_chapter, story_track_idx, story_player_color
+        story_mode = True
+        story_chapter = 1
+        story_track_idx = 0
+        story_player_color = RACER_COLORS[selected_color_idx]
+        start_cutscene("intro")
+
+    def start_cutscene(cid):
+        nonlocal state, cutscene_id, cutscene_t
+        state = STATE_CUTSCENE
+        cutscene_id = cid
+        cutscene_t = 0.0
+
+    def end_cutscene():
+        """Fim (ou pulo) de uma cutscene: segue pro que vem depois dela."""
+        nonlocal state, story_chapter, story_mode
+        if cutscene_id == "intro":
+            start_story_race(1, TRACKS[0]["key"], story_player_color)
+        elif cutscene_id == "lab_arrival":
+            story_chapter = 2
+            start_story_race(2, TRACKS[13]["key"], story_player_color)
+        elif cutscene_id == "victory":
+            state = STATE_STORY_END
+        else:  # "laugh" -> volta pra tela inicial
+            story_mode = False
+            state = STATE_SPLASH
+            switch_music(MUSIC_PATH)
+            set_music_volume(0.55 if music_on else 0.0)
+
+    def advance_story():
+        """Chamado ao confirmar o resultado de uma pista do modo HISTÓRIA:
+        segue pra próxima pista do Cenário 1, ou passa pro Cenário 2
+        (VILÃO, pista 14) depois da 13ª pista."""
+        nonlocal story_track_idx, story_chapter
+        story_track_idx += 1
+        if story_track_idx < 13:
+            start_story_race(1, TRACKS[story_track_idx]["key"], story_player_color)
+        else:
+            start_cutscene("lab_arrival")
+
     running = True
     while running:
         raw_dt = clock.tick(FPS) / 1000.0
@@ -1706,7 +2367,37 @@ def main():
                     music_on = not music_on
                     set_music_volume(0.55 if music_on else 0.0)
 
-                if state == STATE_TITLE:
+                if state == STATE_SPLASH:
+                    if event.key == pygame.K_h:
+                        state = STATE_STORY_COLOR_SELECT
+                    elif event.key in (pygame.K_RETURN, pygame.K_SPACE, pygame.K_KP_ENTER):
+                        state = STATE_TITLE
+
+                elif state == STATE_STORY_COLOR_SELECT:
+                    if event.key in (pygame.K_LEFT, pygame.K_a):
+                        selected_color_idx = (selected_color_idx - 1) % len(RACER_COLORS)
+                    elif event.key in (pygame.K_RIGHT, pygame.K_d):
+                        selected_color_idx = (selected_color_idx + 1) % len(RACER_COLORS)
+                    elif event.key in (pygame.K_RETURN, pygame.K_SPACE, pygame.K_KP_ENTER):
+                        begin_story()
+
+                elif state == STATE_STORY_TRACK_RESULT:
+                    if event.key in (pygame.K_RETURN, pygame.K_SPACE, pygame.K_KP_ENTER):
+                        advance_story()
+
+                elif state == STATE_STORY_VILLAIN_RESULT:
+                    if event.key in (pygame.K_RETURN, pygame.K_SPACE, pygame.K_KP_ENTER):
+                        start_story_race(2, TRACKS[13]["key"], story_player_color)  # tenta de novo
+
+                elif state == STATE_STORY_END:
+                    if event.key in (pygame.K_RETURN, pygame.K_SPACE, pygame.K_KP_ENTER):
+                        start_cutscene("laugh")
+
+                elif state == STATE_CUTSCENE:
+                    if event.key in (pygame.K_RETURN, pygame.K_SPACE, pygame.K_KP_ENTER) and cutscene_t > 0.6:
+                        end_cutscene()
+
+                elif state == STATE_TITLE:
                     if event.key in (pygame.K_LEFT, pygame.K_a):
                         selected_color_idx = (selected_color_idx - 1) % len(RACER_COLORS)
                     elif event.key in (pygame.K_RIGHT, pygame.K_d):
@@ -1748,6 +2439,36 @@ def main():
                         state = STATE_TITLE
                         switch_music(MUSIC_PATH)
                         set_music_volume(0.55 if music_on else 0.0)
+
+            elif event.type == pygame.MOUSEBUTTONDOWN and state == STATE_SPLASH:
+                if historia_rect and historia_rect.collidepoint(event.pos):
+                    state = STATE_STORY_COLOR_SELECT
+                elif corrida_rect and corrida_rect.collidepoint(event.pos):
+                    state = STATE_TITLE
+
+            elif event.type == pygame.MOUSEBUTTONDOWN and state == STATE_STORY_COLOR_SELECT:
+                mx, my = event.pos
+                for i, rect in enumerate(story_color_rects):
+                    if rect and rect.collidepoint(mx, my):
+                        selected_color_idx = i
+                if story_confirm_rect and story_confirm_rect.collidepoint(mx, my):
+                    begin_story()
+
+            elif event.type == pygame.MOUSEBUTTONDOWN and state == STATE_STORY_TRACK_RESULT:
+                if story_next_rect and story_next_rect.collidepoint(event.pos):
+                    advance_story()
+
+            elif event.type == pygame.MOUSEBUTTONDOWN and state == STATE_STORY_VILLAIN_RESULT:
+                if story_continue_rect and story_continue_rect.collidepoint(event.pos):
+                    start_story_race(2, TRACKS[13]["key"], story_player_color)  # tenta de novo
+
+            elif event.type == pygame.MOUSEBUTTONDOWN and state == STATE_STORY_END:
+                if story_back_rect and story_back_rect.collidepoint(event.pos):
+                    start_cutscene("laugh")
+
+            elif event.type == pygame.MOUSEBUTTONDOWN and state == STATE_CUTSCENE:
+                if cutscene_t > 0.6:
+                    end_cutscene()
 
             elif event.type == pygame.MOUSEBUTTONDOWN and state == STATE_TITLE:
                 mx, my = event.pos
@@ -1807,6 +2528,11 @@ def main():
             if countdown_timer <= 0:
                 state = STATE_RACING
 
+        elif state == STATE_CUTSCENE:
+            cutscene_t += dt
+            if cutscene_t >= CUTSCENE_DUR[cutscene_id]:
+                end_cutscene()
+
         elif state == STATE_RACING:
             leader_x = max(r.world_x for r in racers)
             for r in racers:
@@ -1825,7 +2551,14 @@ def main():
                     r.finish_rank = len(results) + 1
                     results.append(r)
 
-                if campaign_mode:
+                if story_mode:
+                    if story_chapter == 1:
+                        state = STATE_STORY_TRACK_RESULT
+                    elif player.finish_rank == 1:
+                        start_cutscene("victory")      # ganhou do Bicoliso!
+                    else:
+                        state = STATE_STORY_VILLAIN_RESULT  # perdeu: tenta de novo
+                elif campaign_mode:
                     for r in racers:
                         campaign_points[r.color] = campaign_points.get(r.color, 0) + \
                             POINTS_TABLE.get(r.finish_rank, 0)
@@ -1837,7 +2570,15 @@ def main():
                     state = STATE_FINISHED
 
         # ---------------- DESENHO ----------------
-        if state == STATE_TITLE:
+        if state == STATE_SPLASH:
+            historia_rect, corrida_rect = draw_splash_screen(screen, t)
+        elif state == STATE_STORY_COLOR_SELECT:
+            story_color_rects, story_confirm_rect = draw_story_color_screen(screen, t, selected_color_idx)
+        elif state == STATE_STORY_END:
+            story_back_rect = draw_story_end_screen(screen, t)
+        elif state == STATE_CUTSCENE:
+            draw_cutscene(screen, cutscene_id, cutscene_t, story_player_color)
+        elif state == STATE_TITLE:
             color_rects, track_rects, diff_rects, start_rect = draw_title_screen(
                 screen, t, selected_color_idx, difficulty, track_theme)
         else:
@@ -1928,6 +2669,52 @@ def main():
                     hint = font_med.render(f"ENTER para a próxima pista: {next_track['label']}", True, (230, 230, 230))
                     screen.blit(hint, hint.get_rect(center=(WIDTH // 2, HEIGHT - 60)))
                     next_track_rect = None
+
+            if state == STATE_STORY_TRACK_RESULT:
+                overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+                overlay.fill((0, 0, 0, 150))
+                screen.blit(overlay, (0, 0))
+
+                cur_track = TRACKS[story_track_idx]
+                caught = (player.finish_rank == 1)
+                title_txt = "VOCÊ DEIXOU OS ZUMBIS ATRÁS!" if caught else "ELES QUASE TE ALCANÇARAM!"
+                title = font_big.render(title_txt, True, (255, 220, 80))
+                screen.blit(title, title.get_rect(center=(WIDTH // 2, 120)))
+
+                sub = font_med.render(f"Pista {cur_track['n']}: {cur_track['label']} concluída",
+                                      True, (255, 240, 150))
+                screen.blit(sub, sub.get_rect(center=(WIDTH // 2, 180)))
+
+                is_last = (story_track_idx >= 12)
+                next_txt = ("Próximo: o LABORATÓRIO do Professor Bicoliso!" if is_last
+                            else f"Próxima pista: {TRACKS[story_track_idx + 1]['label']}")
+                if IS_ANDROID:
+                    hint = font_small.render(next_txt, True, (230, 230, 230))
+                    screen.blit(hint, hint.get_rect(center=(WIDTH // 2, HEIGHT - 90)))
+                    story_next_rect = draw_tap_to_continue_button(
+                        screen, "CONTINUAR!" if is_last else "PRÓXIMA PISTA!", HEIGHT - 45)
+                else:
+                    hint = font_med.render(f"ENTER para continuar — {next_txt}", True, (230, 230, 230))
+                    screen.blit(hint, hint.get_rect(center=(WIDTH // 2, HEIGHT - 60)))
+                    story_next_rect = None
+
+            if state == STATE_STORY_VILLAIN_RESULT:
+                overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+                overlay.fill((0, 0, 0, 170))
+                screen.blit(overlay, (0, 0))
+
+                title = font_big.render("O BICOLISO VENCEU!", True, (255, 220, 80))
+                screen.blit(title, title.get_rect(center=(WIDTH // 2, 150)))
+
+                sub = font_small.render("Tente de novo — a corrida do Laboratório recomeça!", True, (230, 230, 230))
+                screen.blit(sub, sub.get_rect(center=(WIDTH // 2, 210)))
+
+                if IS_ANDROID:
+                    story_continue_rect = draw_tap_to_continue_button(screen, "TENTAR DE NOVO", HEIGHT - 45)
+                else:
+                    hint = font_med.render("Pressione ENTER para tentar de novo", True, (230, 230, 230))
+                    screen.blit(hint, hint.get_rect(center=(WIDTH // 2, HEIGHT - 60)))
+                    story_continue_rect = None
 
             if state == STATE_CAMPAIGN_FINISHED:
                 overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
