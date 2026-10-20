@@ -905,8 +905,17 @@ def _tint_zombie(img):
     return tinted
 
 
-ZOMBIE_IMG = {c: _tint_zombie(ROBOT_IMG[c]) for c in RACER_COLORS}
-ZOMBIE_SQUASH_IMG = {c: _tint_zombie(ROBOT_SQUASH_IMG[c]) for c in RACER_COLORS}
+def _load_zombie(c, squash):
+    """Zumbi 3D (assets/zombie_<cor>.png); se não existir, tinge o robô."""
+    name = f"zombie_{c}_squash.png" if squash else f"zombie_{c}.png"
+    try:
+        return load(name, (84, 46) if squash else (74, 74))
+    except (FileNotFoundError, pygame.error):
+        return _tint_zombie(ROBOT_SQUASH_IMG[c] if squash else ROBOT_IMG[c])
+
+
+ZOMBIE_IMG = {c: _load_zombie(c, False) for c in RACER_COLORS}
+ZOMBIE_SQUASH_IMG = {c: _load_zombie(c, True) for c in RACER_COLORS}
 
 
 def _bico_vector(surf, cx, by, s, t, mood, facing, press, remote):
@@ -1046,7 +1055,7 @@ try:
 except (FileNotFoundError, pygame.error):
     BICO_PHOTO = None
 _BICO_CACHE = {}
-_BICO_HAND = (0.80, 0.30)   # onde fica o controle na imagem (fração de largura/altura)
+_BICO_HAND = (0.45, 0.45)   # onde fica o controle na imagem (fração de largura/altura)
 
 
 def _bico_scaled(h, flip, red):
