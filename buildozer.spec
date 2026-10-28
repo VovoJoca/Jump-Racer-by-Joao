@@ -6,7 +6,7 @@ package.domain = org.cezar.superjumpracer
 source.dir = .
 source.include_exts = py,png,mp3,wav,txt
 
-version = 2.0
+version = 2.1
 
 # Os assets (sprites e musica) ja vem prontos na pasta assets/, entao
 # o jogo nao precisa gerar nada em tempo real -> nao precisamos

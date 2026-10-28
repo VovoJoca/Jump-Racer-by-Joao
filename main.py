@@ -17,9 +17,9 @@ CONTROLES:
     (também dá pra clicar com o mouse nas opções)
 
   Durante a corrida:
-    - SETA DIREITA / D  -> segure para avançar (pular pra frente)
-    - SETA CIMA    / W  -> mover para cima na pista
-    - SETA BAIXO   / S  -> mover para baixo na pista
+    - SETA CIMA / W / ESPAÇO -> segure para avançar (câmera atrás do robô)
+    - SETA ESQUERDA / A      -> faixa à esquerda
+    - SETA DIREITA  / D      -> faixa à direita
     - M                 -> ligar/desligar a música
     - R                 -> reiniciar depois da corrida (volta pra tela de título)
     - ESC                -> sair
@@ -1572,6 +1572,232 @@ def draw_obstacles_and_stars(surf, cam_x, obstacles, stars, t, theme="cidade"):
             surf.blit(star_img, (sx - star_img.get_width() // 2, lane_y - star_img.get_height() // 2))
 
 
+# --------------------------------------------------------------------------
+# CORRIDA EM PERSPECTIVA (câmera atrás do robô, pseudo-3D)
+# A lógica do jogo (world_x, faixas, colisões) é a mesma de sempre; só o
+# DESENHO muda: a pista foge pro horizonte e os corredores aparecem de costas.
+# --------------------------------------------------------------------------
+PERSPECTIVE = True
+P_HOR = TRACK_TOP - 10        # linha do horizonte (y)
+P_G = 300.0                   # "altura da câmera" em pixels
+P_ZREF = 260.0                # distância (mundo) da câmera ao jogador (escala 1.0)
+P_LANEW = 118.0               # largura de uma faixa (pixels) na escala 1.0
+P_CX = WIDTH // 2
+P_VIEW = 2100.0               # alcance da visão
+P_STEP = 2                    # altura (px) de cada fatia do chão
+
+def _load_back(name, fallback):
+    try:
+        return load(name)
+    except (FileNotFoundError, pygame.error):
+        return fallback
+
+ROBOT_BACK = {c: _load_back(f"robotb_{c}.png", ROBOT_IMG[c]) for c in RACER_COLORS}
+ZOMBIE_BACK = {c: _load_back(f"zombieb_{c}.png", ZOMBIE_IMG[c]) for c in RACER_COLORS}
+VILLAIN_BACK = _load_back("bicoliso_back.png", VILLAIN_IMG)
+
+_P_ROWS = [(y, (y - P_HOR) / P_G) for y in range(P_HOR + P_STEP, HEIGHT, P_STEP)]
+_P_SKY_CACHE = {}
+_P_COLOR_CACHE = {}
+_P_SHADOW = None
+
+
+def _mix(a, b, k):
+    return (int(a[0] + (b[0] - a[0]) * k), int(a[1] + (b[1] - a[1]) * k), int(a[2] + (b[2] - a[2]) * k))
+
+
+def _p_row_colors(theme, band):
+    key = (theme, band)
+    if key not in _P_COLOR_CACHE:
+        cfg = TRACKS_BY_KEY[theme]
+        fog = cfg["sky_bottom"]
+        dark = 0.94 if band else 1.0
+        rows = []
+        for y, s in _P_ROWS:
+            z = P_ZREF / s
+            f = min(0.85, (z / P_VIEW) ** 1.3)
+            ground = _mix(tuple(int(v * (0.96 if band else 1.0)) for v in cfg["side_color"]), fog, f)
+            road = _mix(tuple(int(v * dark) for v in cfg["track_color"]), fog, f)
+            edge = _mix(cfg["track_edge"], fog, f)
+            line = _mix(cfg["lane_line"], fog, f)
+            rows.append((ground, road, edge, line))
+        _P_COLOR_CACHE[key] = rows
+    return _P_COLOR_CACHE[key]
+
+
+def _p_sky(surf, cam_x, theme):
+    cfg = TRACKS_BY_KEY[theme]
+    if theme not in _P_SKY_CACHE:
+        g = pygame.Surface((WIDTH, P_HOR + 1))
+        for y in range(P_HOR + 1):
+            t = y / HEIGHT
+            g.fill(tuple(int(cfg["sky_top"][i] + (cfg["sky_bottom"][i] - cfg["sky_top"][i]) * t) for i in range(3)),
+                   (0, y, WIDTH, 1))
+        _P_SKY_CACHE[theme] = g
+    surf.blit(_P_SKY_CACHE[theme], (0, 0))
+    old_clip = surf.get_clip()
+    surf.set_clip(pygame.Rect(0, 0, WIDTH, P_HOR + 1))
+    draw_sky_decor(surf, cam_x, cfg["decor"])
+    pygame.draw.rect(surf, cfg["side_color"], (0, P_HOR - 56, WIDTH, 60))
+    draw_ground_decor(surf, cam_x, cfg["decor"])
+    surf.set_clip(old_clip)
+
+
+def _p_lane_x(lane, s, cam_lane):
+    return P_CX + (lane - cam_lane) * P_LANEW * s
+
+
+def _p_ground(surf, cam_world, cam_lane, theme):
+    band_len = 70.0
+    for idx, (y, s) in enumerate(_P_ROWS):
+        z = P_ZREF / s
+        w = cam_world + z
+        band = int(w // band_len) & 1
+        ground, road, edge, line = _p_row_colors(theme, band)[idx]
+        pygame.draw.rect(surf, ground, (0, y, WIDTH, P_STEP))
+        xl = _p_lane_x(-0.5, s, cam_lane)
+        xr = _p_lane_x(3.5, s, cam_lane)
+        ew = max(2.0, 0.09 * P_LANEW * s)
+        pygame.draw.rect(surf, edge, (xl - ew, y, xr - xl + 2 * ew, P_STEP))
+        pygame.draw.rect(surf, road, (xl, y, xr - xl, P_STEP))
+        if int(w // 36.0) & 1 == 0:
+            lw = max(1.0, 0.045 * P_LANEW * s)
+            for k in (0.5, 1.5, 2.5):
+                lx = _p_lane_x(k, s, cam_lane)
+                pygame.draw.rect(surf, line, (lx - lw, y, lw * 2, P_STEP))
+
+
+def _p_blit(surf, img, x, y, h, fog=0.0, angle=0.0, squash=1.0):
+    """Desenha img com altura h (px), pés em (x, y)."""
+    h = int(h)
+    if h < 3 or h > 1400:
+        return
+    w = max(1, int(img.get_width() * h / img.get_height() * (1.0 + (1.0 - squash) * 0.6)))
+    hh = max(1, int(h * squash))
+    sc = pygame.transform.smoothscale(img, (w, hh)) if h > 24 else pygame.transform.scale(img, (w, hh))
+    if abs(angle) > 0.5:
+        sc = pygame.transform.rotate(sc, angle)
+    if fog > 0.02:
+        sc.set_alpha(int(255 * (1 - fog)))
+    surf.blit(sc, sc.get_rect(midbottom=(int(x), int(y))))
+
+
+def _p_shadow(surf, x, y, wpx, hpx):
+    global _P_SHADOW
+    if _P_SHADOW is None:
+        _P_SHADOW = pygame.Surface((64, 20), pygame.SRCALPHA)
+        pygame.draw.ellipse(_P_SHADOW, (0, 0, 0, 90), (0, 0, 64, 20))
+    wpx, hpx = int(wpx), int(hpx)
+    if wpx > 2 and hpx > 1:
+        sh = pygame.transform.scale(_P_SHADOW, (wpx, hpx))
+        surf.blit(sh, sh.get_rect(center=(int(x), int(y))))
+
+
+def draw_race_perspective(surf, player, racers, obstacles, stars, t, theme):
+    cam_world = player.world_x - P_ZREF
+    cam_lane = 1.5 + (player.pos_visual - 1.5) * 0.55
+    cfg = TRACKS_BY_KEY[theme]
+    _p_sky(surf, player.world_x, theme)
+    _p_ground(surf, cam_world, cam_lane, theme)
+
+    items = []   # (z, tipo, dado)
+    zmin, zmax = 70.0, P_VIEW
+    for ob in obstacles:
+        z = ob["x"] - cam_world
+        if zmin < z < zmax:
+            items.append((z, "ob", ob))
+    for st in stars:
+        if not st["collected"]:
+            z = st["x"] - cam_world
+            if zmin < z < zmax:
+                items.append((z, "st", st))
+    for r in racers:
+        z = r.world_x - cam_world
+        if zmin < z < zmax:
+            items.append((z, "rc", r))
+    post = (int((cam_world + zmin) // 150) + 1) * 150
+    while post - cam_world < zmax:
+        items.append((post - cam_world, "post", None))
+        post += 150
+    zf = TRACK_LENGTH - cam_world
+    if zmin < zf < zmax:
+        items.append((zf, "fin", None))
+    items.sort(key=lambda it: -it[0])
+
+    ob_img = OBSTACLE_IMG[cfg["obstacle_sprite"]]
+    for z, kind, d in items:
+        s = P_ZREF / z
+        gy = P_HOR + P_G * s
+        if gy > HEIGHT + 260:
+            continue
+        fog = min(0.85, (z / P_VIEW) ** 1.3)
+        if kind == "post":
+            for lane in (-0.95, 3.95):
+                x = _p_lane_x(lane, s, cam_lane)
+                ph = 70 * s
+                col = _mix(cfg["track_edge"], cfg["sky_bottom"], fog)
+                pygame.draw.rect(surf, col, (x - 3 * s, gy - ph, max(2, 6 * s), ph))
+                pygame.draw.circle(surf, _mix(cfg["lane_line"], cfg["sky_bottom"], fog),
+                                   (int(x), int(gy - ph)), max(2, int(8 * s)))
+        elif kind == "fin":
+            x0, x1 = _p_lane_x(-0.5, s, cam_lane), _p_lane_x(3.5, s, cam_lane)
+            s2 = P_ZREF / (z + 28)
+            gy2 = P_HOR + P_G * s2
+            n = 12
+            for i in range(n):
+                xa = x0 + (x1 - x0) * i / n
+                xb = x0 + (x1 - x0) * (i + 1) / n
+                xa2 = _p_lane_x(-0.5 + 4.0 * i / n, s2, cam_lane)
+                xb2 = _p_lane_x(-0.5 + 4.0 * (i + 1) / n, s2, cam_lane)
+                col = (250, 250, 250) if i % 2 == 0 else (20, 20, 20)
+                pygame.draw.polygon(surf, col, [(xa, gy), (xb, gy), (xb2, gy2), (xa2, gy2)])
+            ph = 190 * s
+            for xx in (x0 - 8 * s, x1 + 8 * s):
+                pygame.draw.rect(surf, (60, 45, 30), (xx - 5 * s, gy - ph, max(3, 10 * s), ph))
+            bh = 34 * s
+            cells = 14
+            for i in range(cells):
+                for j in range(2):
+                    col = (250, 250, 250) if (i + j) % 2 == 0 else (20, 20, 20)
+                    cw = (x1 - x0 + 16 * s) / cells
+                    pygame.draw.rect(surf, col, (x0 - 8 * s + i * cw, gy - ph + j * bh / 2, cw + 1, bh / 2 + 1))
+        elif kind == "ob":
+            x = _p_lane_x(d["pos"], s, cam_lane)
+            _p_shadow(surf, x, gy, 52 * s, 14 * s)
+            _p_blit(surf, ob_img, x, gy + 4 * s, ob_img.get_height() * 2.3 * s, fog)
+        elif kind == "st":
+            x = _p_lane_x(d["pos"], s, cam_lane)
+            _p_shadow(surf, x, gy, 40 * s, 10 * s)
+            hov = (46 + math.sin(t * 4 + d["x"]) * 8) * s
+            _p_blit(surf, star_img, x, gy - hov + 36 * s, 62 * s, fog)
+        else:   # corredor
+            r = d
+            x = _p_lane_x(r.pos_visual, s, cam_lane)
+            y = gy + r.bob_offset() * s * 1.4
+            if r.is_villain:
+                img, h = VILLAIN_BACK, 175 * s
+            elif r.is_zombie:
+                img, h = ZOMBIE_BACK[r.color], 120 * s
+            else:
+                img, h = ROBOT_BACK[r.color], 120 * s
+            _p_shadow(surf, x, gy, 70 * s, 18 * s)
+            lean = (r.target_pos - r.pos_visual) * -8.0
+            if r.boost_timer > 0:
+                for k in range(3):
+                    fy = y + (6 + k * 7) * s
+                    pygame.draw.polygon(surf, (255, 190 - k * 40, 40),
+                                        [(x - 12 * s, fy - 6 * s), (x + 12 * s, fy - 6 * s), (x, fy + (14 + k * 5) * s)])
+            _p_blit(surf, img, x, y, h, fog, angle=lean, squash=0.9 if r.squash_timer > 0 else 1.0)
+            if r.stun_timer > 0:
+                dizzy = font_small.render("*", True, (255, 230, 60))
+                surf.blit(dizzy, (x + 18 * s, y - h - 8))
+            if r.is_player:
+                pygame.draw.polygon(surf, (255, 230, 60),
+                                    [(x - 9, y - h - 22), (x + 9, y - h - 22), (x, y - h - 8)])
+                pygame.draw.polygon(surf, (60, 40, 10),
+                                    [(x - 9, y - h - 22), (x + 9, y - h - 22), (x, y - h - 8)], 2)
+
+
 def draw_minimap(surf, racers):
     mx0, mx1 = 260, WIDTH - 40
     my = 30
@@ -1622,8 +1848,8 @@ def race_touch_buttons():
     """Retângulos dos botões de toque durante a corrida."""
     return {
         "move": pygame.Rect(WIDTH - 190, HEIGHT - 190, 170, 170),
-        "up": pygame.Rect(18, HEIGHT // 2 - 100, 84, 84),
-        "down": pygame.Rect(18, HEIGHT // 2 + 16, 84, 84),
+        "up": pygame.Rect(18, HEIGHT - 110, 84, 84),
+        "down": pygame.Rect(116, HEIGHT - 110, 84, 84),
         "mute": pygame.Rect(WIDTH - 54, 54, 42, 42),
     }
 
@@ -1649,8 +1875,13 @@ def draw_race_touch_buttons(surf, moving, music_enabled):
         pygame.draw.rect(s, (255, 255, 255, 140), s.get_rect(), border_radius=14)
         pygame.draw.rect(s, (40, 30, 20, 220), s.get_rect(), width=3, border_radius=14)
         surf.blit(s, r.topleft)
-        lbl = font_med.render(arrow, True, (40, 30, 20))
-        surf.blit(lbl, lbl.get_rect(center=r.center))
+        c = r.center
+        if PERSPECTIVE:   # setas pra esquerda / direita
+            d = -1 if key == "up" else 1
+            pygame.draw.polygon(surf, (40, 30, 20), [(c[0] - 18 * d, c[1]), (c[0] + 14 * d, c[1] - 22), (c[0] + 14 * d, c[1] + 22)])
+        else:
+            lbl = font_med.render(arrow, True, (40, 30, 20))
+            surf.blit(lbl, lbl.get_rect(center=c))
 
     mute = btns["mute"]
     s = pygame.Surface((mute.width, mute.height), pygame.SRCALPHA)
@@ -2489,7 +2720,12 @@ def main():
                         begin_race_from_title()
 
                 elif state == STATE_RACING:
-                    if event.key in (pygame.K_UP, pygame.K_w):
+                    if PERSPECTIVE:
+                        if event.key in (pygame.K_LEFT, pygame.K_a):
+                            player.set_pos(player.target_pos - 1)
+                        elif event.key in (pygame.K_RIGHT, pygame.K_d):
+                            player.set_pos(player.target_pos + 1)
+                    elif event.key in (pygame.K_UP, pygame.K_w):
                         player.set_pos(player.target_pos - 1)
                     elif event.key in (pygame.K_DOWN, pygame.K_s):
                         player.set_pos(player.target_pos + 1)
@@ -2592,7 +2828,10 @@ def main():
                     set_music_volume(0.55 if music_on else 0.0)
 
         keys = pygame.key.get_pressed()
-        moving_right = keys[pygame.K_RIGHT] or keys[pygame.K_d] or touch_moving
+        if PERSPECTIVE:
+            moving_right = keys[pygame.K_UP] or keys[pygame.K_w] or keys[pygame.K_SPACE] or touch_moving
+        else:
+            moving_right = keys[pygame.K_RIGHT] or keys[pygame.K_d] or touch_moving
 
         if state == STATE_COUNTDOWN:
             countdown_timer -= dt
@@ -2656,10 +2895,13 @@ def main():
                 screen, t, selected_color_idx, difficulty, track_theme)
         else:
             cam_x = player.world_x
-            draw_background(screen, cam_x, race_theme)
-            draw_obstacles_and_stars(screen, cam_x, obstacles, stars, t, race_theme)
-            for r in sorted(racers, key=lambda rr: rr.pos_visual):
-                r.draw(screen, cam_x)
+            if PERSPECTIVE:
+                draw_race_perspective(screen, player, racers, obstacles, stars, t, race_theme)
+            else:
+                draw_background(screen, cam_x, race_theme)
+                draw_obstacles_and_stars(screen, cam_x, obstacles, stars, t, race_theme)
+                for r in sorted(racers, key=lambda rr: rr.pos_visual):
+                    r.draw(screen, cam_x)
             draw_minimap(screen, racers)
             draw_equalizer(screen, song_time, WIDTH - 216, HEIGHT - 96, MUSIC_OK and music_on,
                            synced=not USING_CUSTOM_MUSIC)
@@ -2683,7 +2925,7 @@ def main():
                     flash.fill((255, 70, 60, 70))
                     screen.blit(flash, (0, 0))
                 if not moving_right:
-                    hint = font_small.render("segure -> pra andar!", True, (255, 235, 120))
+                    hint = font_small.render("segure CIMA (ou W) pra andar!" if PERSPECTIVE else "segure -> pra andar!", True, (255, 235, 120))
                     screen.blit(hint, (16, 122))
                 if IS_ANDROID:
                     draw_race_touch_buttons(screen, moving_right, music_on)

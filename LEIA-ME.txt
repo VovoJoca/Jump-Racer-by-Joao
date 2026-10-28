@@ -1,0 +1,96 @@
+SUPER JUMP RACER — modo HISTÓRIA (zumbis + vilão) + modo CORRIDA
+====================================================================
+
+COMO JOGAR
+1) Instale as dependências (só precisa no PC/dev; no Android isso já
+   vem empacotado pelo Buildozer):
+   pip install pygame-ce numpy pillow
+
+2) Rode o jogo:
+   python main.py
+
+
+TELA INICIAL (NOVA!)
+- Aparece primeiro, com o título do jogo e dois botões: HISTÓRIA e
+  CORRIDA.
+- CORRIDA leva direto pra tela de título de sempre (escolha de robô,
+  pista entre as 14, dificuldade) — funciona exatamente como antes,
+  campanha automática incluída se começar pela Pista 1.
+- HISTÓRIA leva pro novo modo narrativo, descrito abaixo.
+- Teclado: ENTER = CORRIDA, H = HISTÓRIA. Mouse/toque: clique no botão.
+
+
+MODO HISTÓRIA — com cutscenes!
+================================
+Escolha o seu robô e a história começa:
+
+CUTSCENE 1 (cidade): os robôs passeiam tranquilos até aparecer o
+Professor Bicoliso, o flamingo cientista, com um controle remoto. Ele
+aperta o botão e todos os robôs (menos o seu) viram ZUMBIS. Ele tenta
+transformar o seu também, mas não funciona! Você sai correndo atrás
+dele, mas os zumbis tapam o caminho.
+
+CENÁRIO 1 (pistas 1 a 13): você persegue os 3 zumbis (mais lentos e
+erráticos) pelas 13 pistas, em sequência.
+
+CUTSCENE 2: você chega ao laboratório; o Bicoliso aparece e desafia
+você pra uma corrida.
+
+CENÁRIO 2 (pista 14, Laboratório): corrida só você contra o Bicoliso.
+Se perder, a corrida recomeça até você ganhar!
+
+CUTSCENE 3 (se ganhar): os robôs voltam ao normal e atacam o Bicoliso,
+que foge.
+
+CENÁRIO 3: tela de FIM (com o novo logo). Ao clicar/ENTER, aparece o
+Bicoliso gargalhando no laboratório, tela preta "CONTINUA..." e volta
+pra tela inicial.
+
+Nas cutscenes, ENTER (ou toque na tela, no Android) pula a cena.
+O Bicoliso, os zumbis e as cutscenes são desenhados pelo próprio código
+— nenhum arquivo de imagem novo em assets/.
+
+
+MODO CORRIDA (como já era)
+=============================
+- Seta Esquerda/Direita -> escolher a cor do robô (9 opções)
+- T / SHIFT+T           -> navegar pelas 14 pistas (com prévia da
+  música de cada uma)
+- Seta Cima/Baixo       -> escolher a dificuldade
+- ENTER                 -> começar
+- também dá pra usar o mouse/toque nas setas e nos botões
+
+DURANTE A CORRIDA (os dois modos)
+- Seta Cima / W / Espaço -> SEGURE para avançar (câmera atrás do robô)
+- Seta Esquerda/Direita (A / D) -> trocar de faixa
+- M                 -> ligar/desligar a música
+- ESC               -> sair
+- No Android: botões de toque na tela (ANDAR, setas esquerda/direita, mudo)
+
+MODO CAMPANHA (CORRIDA, começando pela Pista 1)
+- As 14 pistas acontecem em sequência obrigatória, com pontuação por
+  colocação (1º=5, 2º=4, 3º=3, 4º=2 pontos) e classificação final no
+  fim da 14ª pista.
+- Começando por qualquer outra pista (2 a 14), é corrida avulsa, sem
+  pontuação.
+
+Cada uma das 14 pistas pode ter sua própria música: coloque arquivos
+assets/custom_theme01.mp3 até assets/custom_theme14.mp3 (na ordem das
+pistas) — o jogo detecta e toca automaticamente (também aceita .ogg
+e .wav).
+
+
+TESTES REALIZADOS NESTA VERSÃO
+=================================
+- Simulação completa (sem tela, via SDL dummy) do fluxo HISTÓRIA
+  inteiro: tela inicial -> escolha de robô -> as 13 pistas do
+  Cenário 1 -> a pista do VILÃO (Cenário 2) -> tela final (Cenário 3)
+  -> volta pra tela inicial — sem nenhum erro.
+- Simulação completa do modo CORRIDA/CAMPANHA (14 pistas em sequência
+  até a classificação final) — confirmando que o fluxo original não
+  foi afetado pelas novidades.
+- new_story_race_ch1/ch2, draw_minimap e os sprites (zumbi/vilão)
+  testados com as 9 cores de robô, nas 14 pistas, sem KeyError.
+
+Os sprites em pixel art e a trilha sonora padrão são gerados
+automaticamente na pasta assets/ na primeira execução.
