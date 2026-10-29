@@ -871,8 +871,8 @@ def load(name, size=None):
     return img
 
 
-ROBOT_IMG = {c: load(f"robot_{c}.png", (74, 74)) for c in RACER_COLORS}
-ROBOT_SQUASH_IMG = {c: load(f"robot_{c}_squash.png", (84, 46)) for c in RACER_COLORS}
+ROBOT_IMG = {c: load(f"robot_{c}.png", (92, 92)) for c in RACER_COLORS}
+ROBOT_SQUASH_IMG = {c: load(f"robot_{c}_squash.png", (104, 57)) for c in RACER_COLORS}
 ROBOT_ICON = {c: load(f"robot_{c}.png", (56, 56)) for c in RACER_COLORS}
 star_img = load("star.png", (32, 32))
 spike_img = load("spike.png", (40, 40))
@@ -909,7 +909,7 @@ def _load_zombie(c, squash):
     """Zumbi 3D (assets/zombie_<cor>.png); se não existir, tinge o robô."""
     name = f"zombie_{c}_squash.png" if squash else f"zombie_{c}.png"
     try:
-        return load(name, (84, 46) if squash else (74, 74))
+        return load(name, (104, 57) if squash else (92, 92))
     except (FileNotFoundError, pygame.error):
         return _tint_zombie(ROBOT_SQUASH_IMG[c] if squash else ROBOT_IMG[c])
 
@@ -2121,6 +2121,72 @@ def draw_splash_screen(surf, t):
 
 
 # --------------------------------------------------------------------------
+# TELA DE MODO: 2D ou 3D (aparece antes da tela HISTÓRIA / CORRIDA)
+# --------------------------------------------------------------------------
+try:
+    MODE_COVER = load("modo_capa.png")
+except (FileNotFoundError, pygame.error):
+    MODE_COVER = None
+_MODE_BG = None
+# caixas "2D" e "3D" desenhadas na arte original (768 x 1364)
+_COVER_BOX = {"2d": (197, 1283, 285, 1332), "3d": (443, 1283, 532, 1332)}
+
+
+def draw_mode_screen(surf, t, sel):
+    """Devolve {"2d": [retângulos clicáveis], "3d": [...]}."""
+    global _MODE_BG
+    if MODE_COVER is not None:
+        if _MODE_BG is None:   # fundo: a mesma arte, esticada e borrada
+            small = pygame.transform.smoothscale(MODE_COVER, (12, 20))
+            bg = pygame.transform.smoothscale(small, (WIDTH, HEIGHT))
+            bg.fill((120, 120, 120), special_flags=pygame.BLEND_RGB_MULT)
+            _MODE_BG = bg
+        surf.blit(_MODE_BG, (0, 0))
+        k = HEIGHT / MODE_COVER.get_height()
+        art = pygame.transform.smoothscale(MODE_COVER, (int(MODE_COVER.get_width() * k), HEIGHT))
+        ax = (WIDTH - art.get_width()) // 2
+        surf.blit(art, (ax, 0))
+        kk = HEIGHT / 1364.0
+        sx = art.get_width() / 768.0
+    else:
+        for y in range(HEIGHT):
+            tt = y / HEIGHT
+            surf.fill(tuple(int(SKY_TOP[i] + (SKY_BOTTOM[i] - SKY_TOP[i]) * tt) for i in range(3)), (0, y, WIDTH, 1))
+        ax, kk, sx = 0, 1.0, 1.0
+    rects = {"2d": [], "3d": []}
+    # botões grandes nas laterais (bons pra tocar) ...
+    cy = HEIGHT // 2 + 40
+    for key, cx, label, col in (("2d", 150, "2D", (70, 150, 90)), ("3d", WIDTH - 150, "3D", (210, 120, 40))):
+        w, h = 230, 120
+        r = pygame.Rect(cx - w // 2, cy - h // 2, w, h)
+        pulse = 1 + (0.04 * math.sin(t * 5) if sel == key else 0)
+        rr = r.inflate(int(w * (pulse - 1)), int(h * (pulse - 1)))
+        s2 = pygame.Surface(rr.size, pygame.SRCALPHA)
+        pygame.draw.rect(s2, col + ((245,) if sel == key else (190,)), s2.get_rect(), border_radius=22)
+        pygame.draw.rect(s2, (255, 255, 255, 255 if sel == key else 150), s2.get_rect(),
+                         width=6 if sel == key else 3, border_radius=22)
+        surf.blit(s2, rr.topleft)
+        lbl = font_big.render(label, True, (255, 255, 255))
+        surf.blit(lbl, lbl.get_rect(center=rr.center))
+        rects[key].append(r)
+    # ... e as caixas da própria arte também funcionam
+    for key, (x0, y0, x1, y1) in _COVER_BOX.items():
+        rc = pygame.Rect(int(ax + x0 * sx) - 24, int(y0 * kk) - 22, int((x1 - x0) * sx) + 48, int((y1 - y0) * kk) + 44)
+        rects[key].append(rc)
+        if sel == key:
+            pygame.draw.rect(surf, (255, 255, 255), rc, width=3, border_radius=8)
+    tip = font_small.render("2D = vista lateral clássica   |   3D = câmera atrás do robô", True, (255, 255, 255))
+    surf.blit(font_small.render("2D = vista lateral clássica   |   3D = câmera atrás do robô", True, (0, 0, 0)),
+              tip.get_rect(center=(WIDTH // 2 + 1, 26)))
+    surf.blit(tip, tip.get_rect(center=(WIDTH // 2, 25)))
+    if not IS_ANDROID:
+        for cx, txt in ((150, "tecla 2"), (WIDTH - 150, "tecla 3")):
+            h2 = font_small.render(txt, True, (255, 255, 255))
+            surf.blit(h2, h2.get_rect(center=(cx, cy + 82)))
+    return rects
+
+
+# --------------------------------------------------------------------------
 # MODO HISTÓRIA — seleção de robô
 # --------------------------------------------------------------------------
 def draw_story_color_screen(surf, t, selected_color_idx):
@@ -2508,8 +2574,9 @@ def new_race(player_color, difficulty, track_key):
 
 
 def main():
-    global music_on
+    global music_on, PERSPECTIVE
 
+    STATE_MODE = "mode"                    # NOVA tela inicial: 2D ou 3D
     STATE_SPLASH = "splash"                # NOVA tela inicial: HISTÓRIA ou CORRIDA
     STATE_TITLE = "title"
     STATE_COUNTDOWN = "countdown"
@@ -2525,7 +2592,10 @@ def main():
     STATE_STORY_END = "story_end"                        # Cenário 3: "novo logo" + FIM
     STATE_CUTSCENE = "cutscene"                          # filminhos da história
 
-    state = STATE_SPLASH
+    state = STATE_MODE
+    mode_sel = "3d" if PERSPECTIVE else "2d"
+    mode_rects = {"2d": [], "3d": []}
+    mode_chip_rect = None
     selected_color_idx = 0
     difficulty = "facil"
     track_theme = "cidade"
@@ -2671,8 +2741,20 @@ def main():
                     music_on = not music_on
                     set_music_volume(0.55 if music_on else 0.0)
 
-                if state == STATE_SPLASH:
-                    if event.key == pygame.K_h:
+                if state == STATE_MODE:
+                    if event.key in (pygame.K_LEFT, pygame.K_a, pygame.K_2, pygame.K_KP2):
+                        mode_sel = "2d"
+                    elif event.key in (pygame.K_RIGHT, pygame.K_d, pygame.K_3, pygame.K_KP3):
+                        mode_sel = "3d"
+                    if event.key in (pygame.K_2, pygame.K_KP2, pygame.K_3, pygame.K_KP3,
+                                     pygame.K_RETURN, pygame.K_SPACE, pygame.K_KP_ENTER):
+                        PERSPECTIVE = (mode_sel == "3d")
+                        state = STATE_SPLASH
+
+                elif state == STATE_SPLASH:
+                    if event.key == pygame.K_TAB:
+                        state = STATE_MODE
+                    elif event.key == pygame.K_h:
                         state = STATE_STORY_COLOR_SELECT
                     elif event.key in (pygame.K_RETURN, pygame.K_SPACE, pygame.K_KP_ENTER):
                         state = STATE_TITLE
@@ -2749,8 +2831,17 @@ def main():
                         switch_music(MUSIC_PATH)
                         set_music_volume(0.55 if music_on else 0.0)
 
+            elif event.type == pygame.MOUSEBUTTONDOWN and state == STATE_MODE:
+                for key in ("2d", "3d"):
+                    if any(r.collidepoint(event.pos) for r in mode_rects[key]):
+                        mode_sel = key
+                        PERSPECTIVE = (key == "3d")
+                        state = STATE_SPLASH
+
             elif event.type == pygame.MOUSEBUTTONDOWN and state == STATE_SPLASH:
-                if historia_rect and historia_rect.collidepoint(event.pos):
+                if mode_chip_rect and mode_chip_rect.collidepoint(event.pos):
+                    state = STATE_MODE
+                elif historia_rect and historia_rect.collidepoint(event.pos):
                     state = STATE_STORY_COLOR_SELECT
                 elif corrida_rect and corrida_rect.collidepoint(event.pos):
                     state = STATE_TITLE
@@ -2882,8 +2973,16 @@ def main():
                     state = STATE_FINISHED
 
         # ---------------- DESENHO ----------------
-        if state == STATE_SPLASH:
+        if state == STATE_MODE:
+            mode_rects = draw_mode_screen(screen, t, mode_sel)
+        elif state == STATE_SPLASH:
             historia_rect, corrida_rect = draw_splash_screen(screen, t)
+            chip = font_small.render("MODO: 3D  (trocar)" if PERSPECTIVE else "MODO: 2D  (trocar)", True, (255, 255, 255))
+            mode_chip_rect = chip.get_rect(topleft=(14, 12)).inflate(24, 14)
+            cs = pygame.Surface(mode_chip_rect.size, pygame.SRCALPHA)
+            pygame.draw.rect(cs, (30, 30, 40, 190), cs.get_rect(), border_radius=12)
+            screen.blit(cs, mode_chip_rect.topleft)
+            screen.blit(chip, chip.get_rect(center=mode_chip_rect.center))
         elif state == STATE_STORY_COLOR_SELECT:
             story_color_rects, story_confirm_rect = draw_story_color_screen(screen, t, selected_color_idx)
         elif state == STATE_STORY_END:
