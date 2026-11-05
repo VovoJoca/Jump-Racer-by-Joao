@@ -93,9 +93,9 @@ PLAYER_ANCHOR_X = 230
 BASE_SPEED = 4.8          # unidades de mundo por "frame de 1/60s" (nominal)
 BOOST_MULT = 1.7
 BOOST_SECONDS = 2.5        # duração do boost em segundos (tempo real)
-STUN_MULT = 0.35
-STUN_SECONDS = 0.75        # duração do atordoamento em segundos (tempo real)
-RUBBER_BAND = 0.0007
+STUN_MULT = 0.30
+STUN_SECONDS = 1.0         # duração do atordoamento em segundos (tempo real)
+RUBBER_BAND = 0.0011
 BOB_HEIGHT = 16
 MAX_DT = 1.0 / 20.0        # trava o passo de tempo (evita saltos grandes em engasgos)
 COLLIDE_RADIUS = 24        # raio de detecção de estrela/espinho (mundo)
@@ -109,8 +109,8 @@ COLOR_LABELS = {
 
 # faixas de velocidade da IA por dificuldade (relativas à sua velocidade base)
 DIFFICULTY_SKILL = {
-    "facil":   (0.97, 1.03),
-    "dificil": (1.15, 1.28),
+    "facil":   (1.02, 1.10),
+    "dificil": (1.22, 1.36),
 }
 
 # ---- as 12 pistas, em ordem de dificuldade crescente ----
@@ -192,11 +192,15 @@ TRACKS_BY_KEY = {t["key"]: t for t in TRACKS}
 
 def track_skill_bonus(track_cfg):
     """Bônus de velocidade da IA que cresce com o número da pista."""
-    return (track_cfg["n"] - 1) * 0.018
+    return (track_cfg["n"] - 1) * 0.022
+
+def track_double_prob(track_cfg):
+    """Chance de dois obstáculos lado a lado (cresce com o número da pista)."""
+    return min(0.45, 0.10 + (track_cfg["n"] - 1) * 0.027)
 
 def track_obstacle_prob(track_cfg):
     """Chance de obstáculo por trecho, crescendo com o número da pista."""
-    return min(0.72, 0.42 + (track_cfg["n"] - 1) * 0.022)
+    return min(0.84, 0.50 + (track_cfg["n"] - 1) * 0.027)
 
 # Quando rodando como script normal, os assets ficam ao lado do .py.
 # Quando "congelado" pelo PyInstaller (executável), usamos a pasta ao
@@ -790,6 +794,73 @@ font_small = make_font(19)
 font_title = make_font(72, bold=True)
 font_track_label = make_font(19, bold=True)
 
+
+class Font3D:
+    """Fonte que desenha todo texto com volume (contorno + extrusão + brilho no topo).
+    Tem o mesmo .render() de uma fonte normal; o resto (size, get_height...) é repassado."""
+    _cache = {}
+
+    def __init__(self, font):
+        self._f = font
+        h = font.get_height()
+        self.depth = max(1, h // 15)
+        self.outline = 1 if h < 34 else 2
+
+    def __getattr__(self, name):
+        return getattr(self._f, name)
+
+    def render(self, text, antialias=True, color=(255, 255, 255), background=None):
+        if background is not None or not text:
+            return self._f.render(text, antialias, color, background) if background is not None \
+                else self._f.render(text, antialias, color)
+        key = (id(self._f), text, tuple(color[:3]))
+        surf = Font3D._cache.get(key)
+        if surf is None:
+            try:
+                surf = self._make(text, tuple(color[:3]))
+            except Exception:
+                surf = self._f.render(text, antialias, color)
+            if len(Font3D._cache) > 500:
+                Font3D._cache.clear()
+            Font3D._cache[key] = surf
+        return surf
+
+    def _make(self, text, color):
+        base = self._f.render(text, True, color)
+        w, h = base.get_size()
+        d, ol = self.depth, self.outline
+        lum = 0.3 * color[0] + 0.59 * color[1] + 0.11 * color[2]
+        if lum < 80:    # texto escuro: só um realce claro embaixo (fica "gravado")
+            out = pygame.Surface((w + 1, h + 1), pygame.SRCALPHA)
+            hi = self._f.render(text, True, (255, 255, 255))
+            hi.set_alpha(150)
+            out.blit(hi, (1, 1))
+            out.blit(base, (0, 0))
+            return out
+        W, H = w + d + 2 * ol, h + d + 2 * ol
+        out = pygame.Surface((W, H), pygame.SRCALPHA)
+        dark = self._f.render(text, True, tuple(int(c * 0.42) for c in color))
+        # silhueta do volume (texto + extrusão) pra fazer o contorno
+        vol = pygame.Surface((W, H), pygame.SRCALPHA)
+        for i in range(d + 1):
+            vol.blit(dark, (ol + i, ol + i))
+        sil = pygame.mask.from_surface(vol).to_surface(setcolor=(28, 22, 34, 255), unsetcolor=(0, 0, 0, 0))
+        for dx in range(-ol, ol + 1):
+            for dy in range(-ol, ol + 1):
+                if dx or dy:
+                    out.blit(sil, (dx, dy))
+        out.blit(vol, (0, 0))
+        face = base.copy()
+        face.fill((46, 46, 46, 0), (0, 0, w, h // 2), special_flags=pygame.BLEND_RGB_ADD)   # topo mais claro
+        out.blit(face, (ol, ol))
+        return out
+
+font_big = Font3D(font_big)
+font_med = Font3D(font_med)
+font_small = Font3D(font_small)
+font_title = Font3D(font_title)
+font_track_label = Font3D(font_track_label)
+
 music_on = True
 music_sound = None
 music_channel = None
@@ -892,6 +963,11 @@ OBSTACLE_IMG = {
 }
 spring_img = load("spring_tile.png", (48, 30))
 flag_img = load("finish_flag.png", (32, 24))
+try:   # versões 3D (se existirem)
+    spring_img = load("spring3d.png", (52, 34))
+    flag_img = load("flag3d.png", (44, 60))
+except (FileNotFoundError, pygame.error):
+    pass
 
 # --------------------------------------------------------------------------
 # VISUAL DO MODO HISTÓRIA (zumbis e o VILÃO) — composto por cima dos
@@ -1120,6 +1196,100 @@ def _build_bicoliso_sprite():
 VILLAIN_IMG = _build_bicoliso_sprite()
 VILLAIN_SQUASH_IMG = pygame.transform.smoothscale(VILLAIN_IMG, (84, 46))
 
+# --------------------------------------------------------------------------
+# ANIMAÇÕES 3D: folhas de 8 quadros (assets/rs_*.png etc.), geradas a partir
+# dos modelos 3D. Se algum arquivo faltar, o jogo usa a imagem parada.
+# --------------------------------------------------------------------------
+ANIM_N = 8
+
+
+def _load_frames(name):
+    try:
+        sheet = load(name)
+    except (FileNotFoundError, pygame.error):
+        return None
+    fw, fh = sheet.get_width() // ANIM_N, sheet.get_height()
+    return [sheet.subsurface((i * fw, 0, fw, fh)).copy() for i in range(ANIM_N)]
+
+
+SPR_SIDE = {c: _load_frames(f"rs_{c}.png") for c in RACER_COLORS}      # robô na mola, de lado
+SPR_BACK = {c: _load_frames(f"rsb_{c}.png") for c in RACER_COLORS}     # robô na mola, de costas
+ZSPR_SIDE = {c: _load_frames(f"zs_{c}.png") for c in RACER_COLORS}
+ZSPR_BACK = {c: _load_frames(f"zsb_{c}.png") for c in RACER_COLORS}
+WALK_SIDE = {c: _load_frames(f"rw_{c}.png") for c in RACER_COLORS}     # cutscenes: com pernas, andando
+ZWALK_SIDE = {c: _load_frames(f"zw_{c}.png") for c in RACER_COLORS}
+BICO_RUN_SIDE = _load_frames("bw_side.png")
+BICO_RUN_BACK = _load_frames("bw_back.png")
+STAR_FR = _load_frames("star3d.png")
+OB3D = {}
+for _k in ("spike", "cactus", "neve", "vulcao", "floresta", "comida", "assombrada", "tabuleiro", "laboratorio"):
+    try:
+        OB3D[_k] = load(f"ob3d_{_k}.png")
+    except (FileNotFoundError, pygame.error):
+        pass
+
+_SCALE_CACHE = {}
+
+
+def scaled_h(img, h):
+    """img redimensionada para altura h (em cache; h é arredondado)."""
+    h = int(h)
+    if h > 40:
+        h = h // 2 * 2
+    if h < 1:
+        return None
+    key = (id(img), h)
+    s = _SCALE_CACHE.get(key)
+    if s is None:
+        w = max(1, int(img.get_width() * h / img.get_height()))
+        s = pygame.transform.smoothscale(img, (w, h)) if h < img.get_height() * 1.6 else pygame.transform.scale(img, (w, h))
+        if len(_SCALE_CACHE) > 1800:
+            _SCALE_CACHE.clear()
+        _SCALE_CACHE[key] = s
+    return s
+
+
+_SC_IMG = {}
+_BG_IMG = {}
+
+
+def sc_img(name):
+    if name not in _SC_IMG:
+        try:
+            _SC_IMG[name] = load(f"sc_{name}.png")
+        except (FileNotFoundError, pygame.error):
+            _SC_IMG[name] = None
+    return _SC_IMG[name]
+
+
+def bg_img(theme):
+    if theme not in _BG_IMG:
+        try:
+            _BG_IMG[theme] = load(f"bg_{theme}.png")
+        except (FileNotFoundError, pygame.error):
+            _BG_IMG[theme] = None
+    return _BG_IMG[theme]
+
+
+# cenário 3D lateral de cada tema (nomes dos arquivos assets/sc_*.png)
+TRACK_SCENERY = {
+    "cidade":      dict(big=["building_a", "building_b", "building_c", "tree_round"], small=["bush", "hydrant", "flower_yellow", "rock"]),
+    "deserto":     dict(big=["cactus_big", "mesa", "cactus_big"], small=["cactus_small", "rock", "dune", "flower_pink"]),
+    "neve":        dict(big=["pine_snow", "snowman", "ice_rock", "pine_snow"], small=["snow_mound", "rock", "ice_rock"]),
+    "caverna":     dict(big=["stalagmite", "crystal_purple", "crystal_cyan"], small=["rock_dark", "crystal_cyan", "crystal_purple"]),
+    "vulcao":      dict(big=["volcano", "lava_rock", "lava_rock"], small=["lava_rock", "rock_dark"]),
+    "castelo":     dict(big=["tower", "wall", "tree_dark"], small=["rock", "bush", "flower_blue"]),
+    "floresta":    dict(big=["tree_round", "pine", "tree_dark", "mushroom_big"], small=["mushroom_red", "bush", "flower_pink", "flower_yellow"]),
+    "comida":      dict(big=["cupcake", "donut", "lollipop", "lollipop2"], small=["cupcake_blue", "lollipop2", "flower_pink"]),
+    "praia":       dict(big=["palm", "umbrella", "palm"], small=["rock", "dune", "flower_pink"]),
+    "assombrada":  dict(big=["dead_tree", "tombstone", "pumpkin"], small=["tombstone", "pumpkin", "rock_dark"]),
+    "lua":         dict(big=["moon_rock", "ufo", "moon_rock"], small=["moon_rock_s", "rock"]),
+    "ceu":         dict(big=["cloud", "rainbow", "cloud"], small=["cloud_s"]),
+    "tabuleiro":   dict(big=["rook_w", "pawn_b", "pawn_w", "dice"], small=["pawn_b", "pawn_w"]),
+    "laboratorio": dict(big=["flask", "lab_machine", "flask_pink"], small=["test_tubes", "flask_pink"]),
+}
+
+
 BPM = 150
 BEAT_DUR = 60.0 / BPM
 BAR_DUR = BEAT_DUR * 4
@@ -1130,7 +1300,7 @@ SNARE_BEATS = [1, 3]
 # --------------------------------------------------------------------------
 # GERAÇÃO DA PISTA
 # --------------------------------------------------------------------------
-def generate_track(seed=None, obstacle_prob=0.5):
+def generate_track(seed=None, obstacle_prob=0.5, double_prob=0.0):
     rng = random.Random(seed)
     obstacles, stars = [], []
     oid = 0
@@ -1140,6 +1310,10 @@ def generate_track(seed=None, obstacle_prob=0.5):
             pos = rng.randint(0, POSITIONS - 1)
             obstacles.append({"id": oid, "x": x, "pos": pos, "hit_by": set()})
             oid += 1
+            if rng.random() < double_prob:   # segundo obstáculo na mesma linha (sempre sobra faixa livre)
+                pos2 = rng.choice([p for p in range(POSITIONS) if p != pos])
+                obstacles.append({"id": oid, "x": x, "pos": pos2, "hit_by": set()})
+                oid += 1
         if rng.random() < 0.5:
             pos = rng.randint(0, POSITIONS - 1)
             stars.append({"id": oid, "x": x + rng.uniform(60, 140), "pos": pos, "collected": False})
@@ -1229,7 +1403,7 @@ class Racer:
         if not self.is_player:
             self.ai_decision_cooldown -= dt * 60.0
             if self.ai_decision_cooldown <= 0:
-                self.ai_decision_cooldown = 12 if self.is_zombie else 20
+                self.ai_decision_cooldown = 12 if self.is_zombie else 11
                 lookahead = 220
                 danger = any(
                     ob["pos"] == self.target_pos and 0 < ob["x"] - self.world_x < lookahead
@@ -1283,21 +1457,40 @@ class Racer:
         sy = lane_y + self.bob_offset()
         return sx, sy
 
+    def anim_index(self):
+        if self.stun_timer > 0:
+            return 0
+        return int(((self.bounce_phase / math.pi) % 1.0) * ANIM_N) % ANIM_N
+
+    def sprite_frames(self, back=False):
+        if self.is_villain:
+            return BICO_RUN_BACK if back else BICO_RUN_SIDE
+        if self.is_zombie:
+            return (ZSPR_BACK if back else ZSPR_SIDE).get(self.color)
+        return (SPR_BACK if back else SPR_SIDE).get(self.color)
+
     def draw(self, surf, cam_x):
         sx, sy = self.screen_pos(cam_x)
         if -80 < sx < WIDTH + 80:
-            if self.is_villain:
-                normal_img, squash_img = VILLAIN_IMG, VILLAIN_SQUASH_IMG
-            elif self.is_zombie:
-                normal_img, squash_img = ZOMBIE_IMG[self.color], ZOMBIE_SQUASH_IMG[self.color]
+            frames = self.sprite_frames()
+            if frames:   # robô 3D animado (mola comprimindo/esticando)
+                base_y = TRACK_TOP + self.pos_visual * POS_H + POS_H * 0.72
+                pygame.draw.ellipse(surf, (30, 30, 36), (int(sx - 26), int(base_y - 5), 52, 11))
+                img = scaled_h(frames[self.anim_index()], 128 if self.is_villain else 108)
+                surf.blit(img, (sx - img.get_width() // 2, sy - img.get_height() + 4))
             else:
-                normal_img, squash_img = ROBOT_IMG[self.color], ROBOT_SQUASH_IMG[self.color]
-            if self.squash_timer > 0:
-                img = squash_img
-                surf.blit(img, (sx - img.get_width() // 2, sy - img.get_height() + 10))
-            else:
-                img = normal_img
-                surf.blit(img, (sx - img.get_width() // 2, sy - img.get_height()))
+                if self.is_villain:
+                    normal_img, squash_img = VILLAIN_IMG, VILLAIN_SQUASH_IMG
+                elif self.is_zombie:
+                    normal_img, squash_img = ZOMBIE_IMG[self.color], ZOMBIE_SQUASH_IMG[self.color]
+                else:
+                    normal_img, squash_img = ROBOT_IMG[self.color], ROBOT_SQUASH_IMG[self.color]
+                if self.squash_timer > 0:
+                    img = squash_img
+                    surf.blit(img, (sx - img.get_width() // 2, sy - img.get_height() + 10))
+                else:
+                    img = normal_img
+                    surf.blit(img, (sx - img.get_width() // 2, sy - img.get_height()))
             if self.stun_timer > 0:
                 dizzy = font_small.render("*", True, (255, 230, 60))
                 surf.blit(dizzy, (sx + 20, sy - img.get_height() - 10))
@@ -1517,7 +1710,14 @@ def draw_background(surf, cam_x, theme="cidade"):
         color = tuple(int(sky_top[i] + (sky_bottom[i] - sky_top[i]) * t) for i in range(3))
         pygame.draw.line(surf, color, (0, y), (WIDTH, y))
 
-    draw_sky_decor(surf, cam_x, decor)
+    bgi = bg_img(theme)
+    if bgi is None:
+        draw_sky_decor(surf, cam_x, decor)
+    else:   # fundo 3D com paralaxe, sobre uma faixa de chão
+        pygame.draw.rect(surf, _mix(cfg["side_color"], cfg["sky_bottom"], 0.45), (0, TRACK_TOP - 10 - 52, WIDTH, 54))
+        off = int(cam_x * 0.05) % bgi.get_width()
+        for bx in (-off, bgi.get_width() - off):
+            surf.blit(bgi, (bx, TRACK_TOP - 12 - bgi.get_height() + 4))
 
     pygame.draw.rect(surf, cfg["track_color"], (0, TRACK_TOP - 10, WIDTH, TRACK_BOTTOM - TRACK_TOP + 20))
     pygame.draw.rect(surf, cfg["track_edge"], (0, TRACK_TOP - 10, WIDTH, 6))
@@ -1531,10 +1731,26 @@ def draw_background(surf, cam_x, theme="cidade"):
     # faixa estreita de "chão" colada na pista (deixa o resto do céu
     # aberto e visível, com as decorações de fundo)
     TOP_MARGIN_H = 60
-    pygame.draw.rect(surf, cfg["side_color"], (0, TRACK_TOP - 10 - TOP_MARGIN_H, WIDTH, TOP_MARGIN_H))
+    if bgi is None:
+        pygame.draw.rect(surf, cfg["side_color"], (0, TRACK_TOP - 10 - TOP_MARGIN_H, WIDTH, TOP_MARGIN_H))
     pygame.draw.rect(surf, cfg["side_color"], (0, TRACK_BOTTOM + 20, WIDTH, HEIGHT - TRACK_BOTTOM - 20))
 
-    draw_ground_decor(surf, cam_x, decor)
+    if bgi is None:
+        draw_ground_decor(surf, cam_x, decor)
+    else:   # decoração 3D no chão de baixo da pista
+        th = TRACK_SCENERY.get(theme) or TRACK_SCENERY["cidade"]
+        names = th["small"] + th["big"][:1]
+        spacing = 170
+        k0 = int(cam_x * 0.9 // spacing) - 1
+        for k in range(k0, k0 + WIDTH // spacing + 3):
+            rr = random.Random(k * 31 + 7)
+            im = sc_img(rr.choice(names))
+            if im is not None:
+                sx = PLAYER_ANCHOR_X + (k * spacing / 0.9 - cam_x) + rr.uniform(-30, 30)
+                hh = min(58, im.get_height() * 0.6)
+                sci = scaled_h(im, hh)
+                if sci is not None and -80 < sx < WIDTH + 80:
+                    surf.blit(sci, (sx - sci.get_width() // 2, HEIGHT - 4 - sci.get_height() - rr.randint(0, 6)))
 
     spacing = 130
     start = int(cam_x // spacing) * spacing - spacing
@@ -1552,24 +1768,38 @@ def draw_background(surf, cam_x, theme="cidade"):
         pygame.draw.rect(surf, (60, 45, 30), (fx - 6, TRACK_TOP - 10, 12, TRACK_BOTTOM - TRACK_TOP + 20))
         for pos in range(POSITIONS):
             y0 = TRACK_TOP + pos * POS_H
-            surf.blit(flag_img, (fx - 6, y0 + 4))
-            surf.blit(flag_img, (fx - 6, y0 + POS_H - 28))
+            if flag_img.get_height() > 40:
+                surf.blit(flag_img, (fx - 22, y0 + POS_H - flag_img.get_height() - 2))
+            else:
+                surf.blit(flag_img, (fx - 6, y0 + 4))
+                surf.blit(flag_img, (fx - 6, y0 + POS_H - 28))
 
 
 def draw_obstacles_and_stars(surf, cam_x, obstacles, stars, t, theme="cidade"):
-    ob_img = OBSTACLE_IMG[TRACKS_BY_KEY[theme]["obstacle_sprite"]]
+    key = TRACKS_BY_KEY[theme]["obstacle_sprite"]
+    ob_img = OB3D.get(key)
+    old_img = OBSTACLE_IMG[key]
     for ob in obstacles:
         sx = PLAYER_ANCHOR_X + (ob["x"] - cam_x)
         if -60 < sx < WIDTH + 60:
             lane_y = TRACK_TOP + ob["pos"] * POS_H + POS_H * 0.78
-            surf.blit(ob_img, (sx - ob_img.get_width() // 2, lane_y - ob_img.get_height() + 8))
+            if ob_img is not None:
+                im = scaled_h(ob_img, 62)
+                pygame.draw.ellipse(surf, (30, 30, 36), (int(sx - 22), int(lane_y - 4), 44, 9))
+                surf.blit(im, (sx - im.get_width() // 2, lane_y - im.get_height() + 6))
+            else:
+                surf.blit(old_img, (sx - old_img.get_width() // 2, lane_y - old_img.get_height() + 8))
     for st in stars:
         if st["collected"]:
             continue
         sx = PLAYER_ANCHOR_X + (st["x"] - cam_x)
         if -60 < sx < WIDTH + 60:
             lane_y = TRACK_TOP + st["pos"] * POS_H + POS_H * 0.5 + math.sin(t * 4 + st["x"]) * 6
-            surf.blit(star_img, (sx - star_img.get_width() // 2, lane_y - star_img.get_height() // 2))
+            if STAR_FR:
+                im = scaled_h(STAR_FR[int(t * 9 + st["x"] * 0.013) % ANIM_N], 40)
+            else:
+                im = star_img
+            surf.blit(im, (sx - im.get_width() // 2, lane_y - im.get_height() // 2))
 
 
 # --------------------------------------------------------------------------
@@ -1585,6 +1815,10 @@ P_LANEW = 118.0               # largura de uma faixa (pixels) na escala 1.0
 P_CX = WIDTH // 2
 P_VIEW = 2100.0               # alcance da visão
 P_STEP = 2                    # altura (px) de cada fatia do chão
+SC_STEP = 110.0               # a cada tantas unidades de mundo nasce cenário
+SC_VIEW = 1500.0              # alcance do cenário lateral
+K_SC, K_OB, K_STAR = 0.9, 1.45, 1.2
+
 
 def _load_back(name, fallback):
     try:
@@ -1600,6 +1834,7 @@ _P_ROWS = [(y, (y - P_HOR) / P_G) for y in range(P_HOR + P_STEP, HEIGHT, P_STEP)
 _P_SKY_CACHE = {}
 _P_COLOR_CACHE = {}
 _P_SHADOW = None
+_SLOT_CACHE = {}
 
 
 def _mix(a, b, k):
@@ -1628,19 +1863,27 @@ def _p_row_colors(theme, band):
 def _p_sky(surf, cam_x, theme):
     cfg = TRACKS_BY_KEY[theme]
     if theme not in _P_SKY_CACHE:
-        g = pygame.Surface((WIDTH, P_HOR + 1))
-        for y in range(P_HOR + 1):
+        g = pygame.Surface((WIDTH, P_HOR + P_STEP))
+        for y in range(P_HOR + P_STEP):
             t = y / HEIGHT
             g.fill(tuple(int(cfg["sky_top"][i] + (cfg["sky_bottom"][i] - cfg["sky_top"][i]) * t) for i in range(3)),
                    (0, y, WIDTH, 1))
         _P_SKY_CACHE[theme] = g
     surf.blit(_P_SKY_CACHE[theme], (0, 0))
-    old_clip = surf.get_clip()
-    surf.set_clip(pygame.Rect(0, 0, WIDTH, P_HOR + 1))
-    draw_sky_decor(surf, cam_x, cfg["decor"])
-    pygame.draw.rect(surf, cfg["side_color"], (0, P_HOR - 56, WIDTH, 60))
-    draw_ground_decor(surf, cam_x, cfg["decor"])
-    surf.set_clip(old_clip)
+    bg = bg_img(theme)
+    if bg is not None:   # fundo 3D (montanhas / prédios / etc.) com paralaxe
+        far = _mix(cfg["side_color"], cfg["sky_bottom"], 0.55)
+        pygame.draw.rect(surf, far, (0, P_HOR - 4, WIDTH, 6 + P_STEP))
+        off = int(cam_x * 0.05) % bg.get_width()
+        for bx in (-off, bg.get_width() - off):
+            surf.blit(bg, (bx, P_HOR - bg.get_height() + 2))
+    else:
+        old_clip = surf.get_clip()
+        surf.set_clip(pygame.Rect(0, 0, WIDTH, P_HOR + 1))
+        draw_sky_decor(surf, cam_x, cfg["decor"])
+        pygame.draw.rect(surf, cfg["side_color"], (0, P_HOR - 56, WIDTH, 60))
+        draw_ground_decor(surf, cam_x, cfg["decor"])
+        surf.set_clip(old_clip)
 
 
 def _p_lane_x(lane, s, cam_lane):
@@ -1667,18 +1910,47 @@ def _p_ground(surf, cam_world, cam_lane, theme):
                 pygame.draw.rect(surf, line, (lx - lw, y, lw * 2, P_STEP))
 
 
+def _p_slot(theme, k):
+    """Cenário (grandes + pequenos) do trecho k da pista; sempre igual pra mesma pista."""
+    key = (theme, k)
+    r = _SLOT_CACHE.get(key)
+    if r is None:
+        rng = random.Random(k * 7919 + sum(map(ord, theme)) * 131)
+        th = TRACK_SCENERY.get(theme) or TRACK_SCENERY["cidade"]
+        r = []
+        for side in (-1, 1):
+            if rng.random() < 0.85:
+                off = rng.uniform(0.5, 3.4) + (1.8 if rng.random() < 0.4 else 0.0)
+                lane = (-1.5 - off) if side < 0 else (4.5 + off)
+                r.append(("big", k * SC_STEP + rng.uniform(0, SC_STEP), lane, rng.choice(th["big"]), rng.uniform(0.9, 1.25)))
+            for _ in range(rng.choice((1, 2, 2, 3))):
+                off = rng.uniform(0.2, 4.6)
+                lane = (-1.3 - off) if side < 0 else (4.3 + off)
+                r.append(("small", k * SC_STEP + rng.uniform(0, SC_STEP), lane, rng.choice(th["small"]), rng.uniform(0.8, 1.3)))
+            for _ in range(2):   # manchas no chão
+                off = rng.uniform(0.2, 9.0)
+                lane = (-1.2 - off) if side < 0 else (4.2 + off)
+                r.append(("patch", k * SC_STEP + rng.uniform(0, SC_STEP), lane, rng.random() < 0.5, rng.uniform(0.5, 1.6)))
+        if len(_SLOT_CACHE) > 500:
+            _SLOT_CACHE.clear()
+        _SLOT_CACHE[key] = r
+    return r
+
+
 def _p_blit(surf, img, x, y, h, fog=0.0, angle=0.0, squash=1.0):
     """Desenha img com altura h (px), pés em (x, y)."""
     h = int(h)
-    if h < 3 or h > 1400:
+    if h < 3 or h > 1500:
         return
-    w = max(1, int(img.get_width() * h / img.get_height() * (1.0 + (1.0 - squash) * 0.6)))
-    hh = max(1, int(h * squash))
-    sc = pygame.transform.smoothscale(img, (w, hh)) if h > 24 else pygame.transform.scale(img, (w, hh))
+    sc = scaled_h(img, h * squash)
+    if sc is None:
+        return
     if abs(angle) > 0.5:
         sc = pygame.transform.rotate(sc, angle)
     if fog > 0.02:
         sc.set_alpha(int(255 * (1 - fog)))
+    else:
+        sc.set_alpha(255)
     surf.blit(sc, sc.get_rect(midbottom=(int(x), int(y))))
 
 
@@ -1702,6 +1974,25 @@ def draw_race_perspective(surf, player, racers, obstacles, stars, t, theme):
 
     items = []   # (z, tipo, dado)
     zmin, zmax = 70.0, P_VIEW
+    side_col = cfg["side_color"]
+    for k in range(int((cam_world + zmin) // SC_STEP) - 1, int((cam_world + SC_VIEW) // SC_STEP) + 1):
+        for ent in _p_slot(theme, k):
+            z = ent[1] - cam_world
+            if zmin < z < SC_VIEW:
+                if ent[0] == "patch":   # manchas de chão: desenha já (ficam sempre atrás de tudo)
+                    s = P_ZREF / z
+                    gy = P_HOR + P_G * s
+                    if gy < HEIGHT + 40:
+                        x = _p_lane_x(ent[2], s, cam_lane)
+                        rx = ent[4] * P_LANEW * s
+                        ry = max(1.0, rx * 0.16)
+                        col = _mix(side_col, (255, 255, 255) if ent[3] else (0, 0, 0), 0.10)
+                        col = _mix(col, cfg["sky_bottom"], min(0.85, (z / P_VIEW) ** 1.3))
+                        pygame.draw.ellipse(surf, col, (x - rx, gy - ry, rx * 2, ry * 2))
+                elif ent[0] == "small" and z > 950:
+                    continue
+                else:
+                    items.append((z, "sc", ent))
     for ob in obstacles:
         z = ob["x"] - cam_world
         if zmin < z < zmax:
@@ -1724,14 +2015,25 @@ def draw_race_perspective(surf, player, racers, obstacles, stars, t, theme):
         items.append((zf, "fin", None))
     items.sort(key=lambda it: -it[0])
 
-    ob_img = OBSTACLE_IMG[cfg["obstacle_sprite"]]
+    ob_key = cfg["obstacle_sprite"]
+    ob3 = OB3D.get(ob_key)
+    ob_img = OBSTACLE_IMG[ob_key]
     for z, kind, d in items:
         s = P_ZREF / z
         gy = P_HOR + P_G * s
         if gy > HEIGHT + 260:
             continue
         fog = min(0.85, (z / P_VIEW) ** 1.3)
-        if kind == "post":
+        if kind == "sc":
+            img = sc_img(d[3])
+            if img is not None:
+                x = _p_lane_x(d[2], s, cam_lane)
+                h = img.get_height() * K_SC * d[4] * s
+                if -300 < x < WIDTH + 300:
+                    if d[0] == "big":
+                        _p_shadow(surf, x, gy, img.get_width() * K_SC * d[4] * s * 0.9, h * 0.10)
+                    _p_blit(surf, img, x, gy + 2 * s, h, fog)
+        elif kind == "post":
             for lane in (-0.95, 3.95):
                 x = _p_lane_x(lane, s, cam_lane)
                 ph = 70 * s
@@ -1763,23 +2065,35 @@ def draw_race_perspective(surf, player, racers, obstacles, stars, t, theme):
                     pygame.draw.rect(surf, col, (x0 - 8 * s + i * cw, gy - ph + j * bh / 2, cw + 1, bh / 2 + 1))
         elif kind == "ob":
             x = _p_lane_x(d["pos"], s, cam_lane)
-            _p_shadow(surf, x, gy, 52 * s, 14 * s)
-            _p_blit(surf, ob_img, x, gy + 4 * s, ob_img.get_height() * 2.3 * s, fog)
+            _p_shadow(surf, x, gy, 60 * s, 15 * s)
+            if ob3 is not None:
+                _p_blit(surf, ob3, x, gy + 4 * s, ob3.get_height() * K_OB * s, fog)
+            else:
+                _p_blit(surf, ob_img, x, gy + 4 * s, ob_img.get_height() * 2.3 * s, fog)
         elif kind == "st":
             x = _p_lane_x(d["pos"], s, cam_lane)
             _p_shadow(surf, x, gy, 40 * s, 10 * s)
             hov = (46 + math.sin(t * 4 + d["x"]) * 8) * s
-            _p_blit(surf, star_img, x, gy - hov + 36 * s, 62 * s, fog)
+            if STAR_FR:
+                fr = STAR_FR[int(t * 9 + d["x"] * 0.013) % ANIM_N]
+                _p_blit(surf, fr, x, gy - hov + 36 * s, fr.get_height() * K_STAR * s * 1.15, fog)
+            else:
+                _p_blit(surf, star_img, x, gy - hov + 36 * s, 62 * s, fog)
         else:   # corredor
             r = d
             x = _p_lane_x(r.pos_visual, s, cam_lane)
             y = gy + r.bob_offset() * s * 1.4
-            if r.is_villain:
-                img, h = VILLAIN_BACK, 175 * s
-            elif r.is_zombie:
-                img, h = ZOMBIE_BACK[r.color], 120 * s
+            frames = r.sprite_frames(back=True)
+            if frames:
+                img = frames[r.anim_index()]
+                h = (215 if r.is_villain else 150) * s
             else:
-                img, h = ROBOT_BACK[r.color], 120 * s
+                if r.is_villain:
+                    img, h = VILLAIN_BACK, 175 * s
+                elif r.is_zombie:
+                    img, h = ZOMBIE_BACK[r.color], 120 * s
+                else:
+                    img, h = ROBOT_BACK[r.color], 120 * s
             _p_shadow(surf, x, gy, 70 * s, 18 * s)
             lean = (r.target_pos - r.pos_visual) * -8.0
             if r.boost_timer > 0:
@@ -1787,7 +2101,7 @@ def draw_race_perspective(surf, player, racers, obstacles, stars, t, theme):
                     fy = y + (6 + k * 7) * s
                     pygame.draw.polygon(surf, (255, 190 - k * 40, 40),
                                         [(x - 12 * s, fy - 6 * s), (x + 12 * s, fy - 6 * s), (x, fy + (14 + k * 5) * s)])
-            _p_blit(surf, img, x, y, h, fog, angle=lean, squash=0.9 if r.squash_timer > 0 else 1.0)
+            _p_blit(surf, img, x, y, h, fog, angle=lean)
             if r.stun_timer > 0:
                 dizzy = font_small.render("*", True, (255, 230, 60))
                 surf.blit(dizzy, (x + 18 * s, y - h - 8))
@@ -1878,7 +2192,7 @@ def draw_race_touch_buttons(surf, moving, music_enabled):
         c = r.center
         if PERSPECTIVE:   # setas pra esquerda / direita
             d = -1 if key == "up" else 1
-            pygame.draw.polygon(surf, (40, 30, 20), [(c[0] - 18 * d, c[1]), (c[0] + 14 * d, c[1] - 22), (c[0] + 14 * d, c[1] + 22)])
+            pygame.draw.polygon(surf, (40, 30, 20), [(c[0] + 18 * d, c[1]), (c[0] - 14 * d, c[1] - 22), (c[0] - 14 * d, c[1] + 22)])
         else:
             lbl = font_med.render(arrow, True, (40, 30, 20))
             surf.blit(lbl, lbl.get_rect(center=c))
@@ -2318,7 +2632,12 @@ def _seg(t, a, b):
     return max(0.0, min(1.0, (t - a) / (b - a)))
 
 
-def _cut_robot(color, zombie, size=100):
+def _cut_robot(color, zombie, size=100, t=0.0, run=False):
+    """Robô (com pernas) das cutscenes; anima a caminhada quando há folha de frames."""
+    fr = (ZWALK_SIDE if zombie else WALK_SIDE).get(color)
+    if fr:
+        idx = int(t * (13 if run else 6)) % ANIM_N
+        return scaled_h(fr[idx], int(size * 1.22))
     key = (color, zombie, size)
     if key not in _CUT_ROBOT_CACHE:
         base = ZOMBIE_IMG[color] if zombie else ROBOT_IMG[color]
@@ -2469,7 +2788,7 @@ def draw_cutscene(surf, cid, ct, pc):
 
     if cid != "laugh":
         for (yb, color, zomb, x, run, wob) in sorted(robots, key=lambda r: r[0]):
-            img = _cut_robot(color, zomb)
+            img = _cut_robot(color, zomb, t=ct + yb * 0.013, run=run)
             bob = abs(math.sin(ct * (9 if run else 3) + yb)) * (14 if run else 6)
             pygame.draw.ellipse(surf, (35, 35, 40), (int(x - 28 + wob), int(yb - 6), 56, 10), 0)
             surf.blit(img, (int(x - img.get_width() / 2 + wob), int(yb - img.get_height() - bob)))
@@ -2531,7 +2850,7 @@ def new_story_race_ch1(player_color, track_key):
     """Modo HISTÓRIA, CENÁRIO 1: o robô escolhido persegue 3 zumbis
     (sempre mais lentos e com movimento errático) pelas pistas 1-13."""
     track_cfg = TRACKS_BY_KEY[track_key]
-    obstacles, stars = generate_track(obstacle_prob=track_obstacle_prob(track_cfg))
+    obstacles, stars = generate_track(obstacle_prob=track_obstacle_prob(track_cfg), double_prob=track_double_prob(track_cfg))
     other_colors = [c for c in RACER_COLORS if c != player_color][:3]
     player = Racer(player_color, "Você", pos=1, is_player=True, skill=1.0)
     ai_positions = [p for p in range(POSITIONS) if p != 1]
@@ -2548,7 +2867,7 @@ def new_story_race_ch2(player_color, track_key):
     """Modo HISTÓRIA, CENÁRIO 2: só o robô escolhido e o VILÃO, na
     pista do Laboratório (14)."""
     track_cfg = TRACKS_BY_KEY[track_key]
-    obstacles, stars = generate_track(obstacle_prob=track_obstacle_prob(track_cfg))
+    obstacles, stars = generate_track(obstacle_prob=track_obstacle_prob(track_cfg), double_prob=track_double_prob(track_cfg))
     player = Racer(player_color, "Você", pos=1, is_player=True, skill=1.0)
     vilao = Racer("villain", "Professor Bicoliso", pos=2, skill=random.uniform(0.98, 1.04),
                   is_villain=True)
@@ -2557,7 +2876,7 @@ def new_story_race_ch2(player_color, track_key):
 
 def new_race(player_color, difficulty, track_key):
     track_cfg = TRACKS_BY_KEY[track_key]
-    obstacles, stars = generate_track(obstacle_prob=track_obstacle_prob(track_cfg))
+    obstacles, stars = generate_track(obstacle_prob=track_obstacle_prob(track_cfg), double_prob=track_double_prob(track_cfg))
     other_colors = [c for c in RACER_COLORS if c != player_color]
     lo, hi = DIFFICULTY_SKILL[difficulty]
     bonus = track_skill_bonus(track_cfg)
